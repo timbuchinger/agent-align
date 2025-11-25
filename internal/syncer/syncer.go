@@ -132,7 +132,7 @@ func formatConfig(agent, source string, template Template) string {
 	}
 
 	if config.Format == "toml" {
-		return formatToTOML(servers)
+		return formatCodexConfig(config, servers)
 	}
 	return formatToJSON(config.NodeName, servers)
 }
@@ -330,6 +330,60 @@ func formatToTOML(servers map[string]interface{}) string {
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
+}
+
+func formatCodexConfig(cfg AgentConfig, servers map[string]interface{}) string {
+	var existing string
+	if data, err := os.ReadFile(cfg.FilePath); err == nil {
+		existing = string(data)
+	}
+
+	preserved := strings.TrimRight(stripMCPServersSections(existing), "\r\n")
+	newSections := strings.TrimRight(formatToTOML(servers), "\r\n")
+
+	var parts []string
+	if preserved != "" {
+		parts = append(parts, preserved)
+	}
+	if newSections != "" {
+		parts = append(parts, newSections)
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return strings.Join(parts, "\n\n") + "\n"
+}
+
+func stripMCPServersSections(content string) string {
+	if strings.TrimSpace(content) == "" {
+		return ""
+	}
+
+	lines := strings.Split(content, "\n")
+	var sb strings.Builder
+	insideMCP := false
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			if strings.HasPrefix(trimmed, "[mcp_servers.") {
+				insideMCP = true
+				continue
+			}
+			insideMCP = false
+		}
+		if insideMCP {
+			continue
+		}
+		sb.WriteString(line)
+		if i < len(lines)-1 {
+			sb.WriteByte('\n')
+		}
+	}
+
+	return sb.String()
 }
 
 func normalizeAgent(agent string) string {
