@@ -1,0 +1,56 @@
+name: Commit Message Format
+
+on:
+  push:
+    branches-ignore:
+      - dependabot/**
+  pull_request:
+
+jobs:
+  lint-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure commit messages follow the semantic format
+        run: |
+          set -euo pipefail
+          pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?: .+'
+          range=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_ref=${{ github.event.pull_request.base.ref }}
+            git fetch origin "$base_ref"
+            range="origin/$base_ref..${{ github.sha }}"
+          else
+            before=${{ github.event.before }}
+            if [ "$before" = "0000000000000000000000000000000000000000" ]; then
+              range="${{ github.sha }}"
+            else
+              range="$before..${{ github.sha }}"
+            fi
+          fi
+          echo "Linting commits in $range"
+          if [[ "$range" == *".."* ]]; then
+            commits=$(git rev-list --reverse "$range")
+          else
+            commits="$range"
+          fi
+          if [ -z "$commits" ]; then
+            echo "No commits to lint"
+            exit 0
+          fi
+          failing=0
+          for sha in $commits; do
+            subject=$(git log --format=%s -n 1 "$sha")
+            if ! [[ $subject =~ $pattern ]]; then
+              echo "✗ $subject"
+              failing=1
+            else
+              echo "✓ $subject"
+            fi
+          done
+          if [ "$failing" -ne 0 ]; then
+            echo "Commit messages must follow the conventional format (e.g. feat: add feature)."
+            exit 1
+          fi

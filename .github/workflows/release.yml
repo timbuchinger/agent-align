@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.22
+      - name: Run go tests
+        run: go test ./...
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release

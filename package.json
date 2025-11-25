@@ -1,0 +1,17 @@
+{
+  "name": "server-syncer",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "semantic-release": "semantic-release",
+    "commitlint": "commitlint --from=${1:-HEAD~1} --to=${2:-HEAD}"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^17.7.2",
+    "@commitlint/config-conventional": "^17.7.2",
+    "@semantic-release/commit-analyzer": "^9.0.0",
+    "@semantic-release/github": "^9.0.0",
+    "@semantic-release/release-notes-generator": "^11.0.0",
+    "semantic-release": "^21.0.0"
+  }
+}
