@@ -1,13 +1,13 @@
 {
-  "name": "Server Syncer",
+  "name": "Agent Align",
   "image": "mcr.microsoft.com/devcontainers/go:1.22",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20"
     }
   },
-  "workspaceFolder": "/workspaces/server-syncer",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/server-syncer,type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/agent-align",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/agent-align,type=bind,consistency=cached",
   "postCreateCommand": "npm ci",
   "customizations": {
     "vscode": {

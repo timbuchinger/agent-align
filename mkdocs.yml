@@ -1,8 +1,8 @@
 site_name: Agent Align
 site_description: Documentation for Agent Align, the MCP configuration sync tool.
-site_url: https://timbuchinger.github.io/server-syncer/
-repo_name: timbuchinger/server-syncer
-repo_url: https://github.com/timbuchinger/server-syncer
+site_url: https://timbuchinger.github.io/agent-align/
+repo_name: timbuchinger/agent-align
+repo_url: https://github.com/timbuchinger/agent-align
 nav:
   - Home: index.md
   - Configuration: configuration.md
