@@ -3,7 +3,10 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"server-syncer/internal/config"
 )
 
 type promptStub struct {
@@ -30,18 +33,23 @@ func TestEnsureConfigFileCreatesDefault(t *testing.T) {
 	orig := promptUser
 	promptUser = stub.answer
 	t.Cleanup(func() { promptUser = orig })
+	origCollect := collectConfig
+	collectConfig = func() (config.Config, error) {
+		return config.Config{Source: "codex", Targets: []string{"gemini", "copilot"}, Template: "template.json"}, nil
+	}
+	t.Cleanup(func() { collectConfig = origCollect })
 
 	if err := ensureConfigFile(path); err != nil {
 		t.Fatalf("ensureConfigFile failed: %v", err)
 	}
 
-	data, err := os.ReadFile(path)
+	createdCfg, err := config.Load(path)
 	if err != nil {
-		t.Fatalf("failed to read created config: %v", err)
+		t.Fatalf("failed to load created config: %v", err)
 	}
-
-	if string(data) != defaultConfigTemplate {
-		t.Fatalf("config does not match template. got %q", string(data))
+	expected := config.Config{Source: "codex", Targets: []string{"gemini", "copilot"}, Template: "template.json"}
+	if !reflect.DeepEqual(createdCfg, expected) {
+		t.Fatalf("config mismatch. got %#v", createdCfg)
 	}
 
 	if len(stub.prompts) != 1 {
@@ -77,17 +85,23 @@ func TestRunInitCommandOverwrite(t *testing.T) {
 	orig := promptUser
 	promptUser = stub.answer
 	t.Cleanup(func() { promptUser = orig })
+	origCollect := collectConfig
+	collectConfig = func() (config.Config, error) {
+		return config.Config{Source: "gemini", Targets: []string{"codex"}, Template: "template.json"}, nil
+	}
+	t.Cleanup(func() { collectConfig = origCollect })
 
 	if err := runInitCommand([]string{"-config", path}); err != nil {
 		t.Fatalf("runInitCommand failed: %v", err)
 	}
 
-	data, err := os.ReadFile(path)
+	createdCfg, err := config.Load(path)
 	if err != nil {
-		t.Fatalf("failed to read config: %v", err)
+		t.Fatalf("failed to load config: %v", err)
 	}
-	if string(data) != defaultConfigTemplate {
-		t.Fatalf("config not overwritten. got %q", string(data))
+	expected := config.Config{Source: "gemini", Targets: []string{"codex"}, Template: "template.json"}
+	if !reflect.DeepEqual(createdCfg, expected) {
+		t.Fatalf("config not overwritten. got %#v", createdCfg)
 	}
 }
 
@@ -128,16 +142,22 @@ func TestRunInitCommandCreatesMissing(t *testing.T) {
 	orig := promptUser
 	promptUser = stub.answer
 	t.Cleanup(func() { promptUser = orig })
+	origCollect := collectConfig
+	collectConfig = func() (config.Config, error) {
+		return config.Config{Source: "copilot", Targets: []string{"claudecode"}, Template: "template.json"}, nil
+	}
+	t.Cleanup(func() { collectConfig = origCollect })
 
 	if err := runInitCommand([]string{"-config", path}); err != nil {
 		t.Fatalf("runInitCommand failed: %v", err)
 	}
 
-	data, err := os.ReadFile(path)
+	createdCfg, err := config.Load(path)
 	if err != nil {
-		t.Fatalf("failed to read config: %v", err)
+		t.Fatalf("failed to load config: %v", err)
 	}
-	if string(data) != defaultConfigTemplate {
-		t.Fatalf("config does not match template. got %q", string(data))
+	expected := config.Config{Source: "copilot", Targets: []string{"claudecode"}, Template: "template.json"}
+	if !reflect.DeepEqual(createdCfg, expected) {
+		t.Fatalf("config mismatch. got %#v", createdCfg)
 	}
 }

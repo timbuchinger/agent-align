@@ -32,6 +32,9 @@ targets:
   - copilot
   - claudecode
   - gemini
+
+# Path to the template file that represents the source agent
+template: configs/codex.json
 ```
 
 ## Supported Agents
@@ -50,5 +53,5 @@ Config file values are used unless you explicitly set these flags:
 - `-source` - Override the source agent
 - `-agents` - Override the target agents
 
-If no config file is found and you omit `-agents`, the CLI defaults to
-`Copilot`, `Codex`, `ClaudeCode`, and `Gemini`.
+The template path always comes from the config file, so populate `template`
+before running the CLI.

@@ -9,23 +9,27 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"unicode"
+
+	_ "embed"
+
+	"gopkg.in/yaml.v3"
 
 	"server-syncer/internal/config"
 	"server-syncer/internal/syncer"
 )
 
 const (
-	defaultAgents         = "Copilot,Codex,ClaudeCode,Gemini"
-	defaultConfigTemplate = `source: codex
-targets:
-  - gemini
-  - copilot
-  - claudecode
-`
+	defaultAgents = "Copilot,Codex,ClaudeCode,Gemini"
 )
 
-var promptUser = askYes
+var (
+	promptUser      = askYes
+	collectConfig   = promptForConfig
+	supportedAgents = []string{"codex", "gemini", "copilot", "claudecode"}
+)
 
 //go:embed config.example.yml
 var exampleConfig string
@@ -38,9 +42,8 @@ func main() {
 		return
 	}
 
-	templatePath := flag.String("template", "", "path to the template file")
 	sourceAgent := flag.String("source", "", "source-of-truth agent name")
-	agents := flag.String("agents", "", "comma-separated list of agents to keep in sync (defaults to Copilot,Codex,ClaudeCode,Gemini)")
+	agents := flag.String("agents", "", fmt.Sprintf("comma-separated list of agents to keep in sync (defaults to %s)", defaultAgents))
 	configPath := flag.String("config", defaultConfigPath(), "path to YAML configuration file describing the source and target agents")
 
 	flag.Usage = func() {
@@ -57,19 +60,13 @@ func main() {
 		log.Fatalf("configuration unavailable: %v", err)
 	}
 
-	if *templatePath == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
-
 	cfg, cfgErr := config.Load(*configPath)
-	if cfgErr != nil && !errors.Is(cfgErr, os.ErrNotExist) {
+	if cfgErr != nil {
 		log.Fatalf("failed to load config %q: %v", *configPath, cfgErr)
 	}
-	useConfig := cfgErr == nil
 
 	finalSource := strings.TrimSpace(*sourceAgent)
-	if finalSource == "" && useConfig {
+	if finalSource == "" {
 		finalSource = cfg.Source
 	}
 	if finalSource == "" {
@@ -79,13 +76,11 @@ func main() {
 	var candidateAgents []string
 	if strings.TrimSpace(*agents) != "" {
 		candidateAgents = parseAgents(*agents)
-	} else if useConfig {
-		candidateAgents = cfg.Targets
 	} else {
-		candidateAgents = parseAgents(defaultAgents)
+		candidateAgents = cfg.Targets
 	}
 
-	tpl, err := syncer.LoadTemplateFromFile(*templatePath)
+	tpl, err := syncer.LoadTemplateFromFile(cfg.Template)
 	if err != nil {
 		log.Fatalf("failed to load template: %v", err)
 	}
@@ -137,12 +132,16 @@ func ensureConfigFile(path string) error {
 		return fmt.Errorf("failed to inspect %q: %w", path, err)
 	}
 
-	prompt := fmt.Sprintf("Configuration %s not found. Create a default config? [Y/n]: ", path)
+	prompt := fmt.Sprintf("Configuration %s not found. %sCreate a default config? [Y/n]: ", path, configPromptSuffix(path))
 	if !promptUser(prompt, true) {
 		return fmt.Errorf("configuration file %s is required", path)
 	}
 
-	if err := writeDefaultConfig(path); err != nil {
+	cfg, err := collectConfig()
+	if err != nil {
+		return fmt.Errorf("failed to collect configuration: %w", err)
+	}
+	if err := writeConfigFile(path, cfg); err != nil {
 		return err
 	}
 	fmt.Printf("Created configuration file at %s\n", path)
@@ -166,7 +165,11 @@ func runInitCommand(args []string) error {
 		return fmt.Errorf("failed to inspect %q: %w", path, err)
 	}
 
-	if err := writeDefaultConfig(path); err != nil {
+	cfg, err := collectConfig()
+	if err != nil {
+		return fmt.Errorf("failed to collect configuration: %w", err)
+	}
+	if err := writeConfigFile(path, cfg); err != nil {
 		return err
 	}
 	fmt.Printf("Created configuration file at %s\n", path)
@@ -198,13 +201,160 @@ func askYes(prompt string, defaultYes bool) bool {
 	}
 }
 
-func writeDefaultConfig(path string) error {
+func promptForConfig() (config.Config, error) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("\nLet's create your server-syncer configuration.")
+	source, err := promptSourceAgent(reader)
+	if err != nil {
+		return config.Config{}, err
+	}
+	targets, err := promptTargetAgents(reader, source)
+	if err != nil {
+		return config.Config{}, err
+	}
+	templatePath, err := promptTemplatePath(reader)
+	if err != nil {
+		return config.Config{}, err
+	}
+	return config.Config{Source: source, Targets: targets, Template: templatePath}, nil
+}
+
+func configPromptSuffix(path string) string {
+	if path == defaultConfigPath() {
+		return "Use -config to choose another path. "
+	}
+	return ""
+}
+
+func promptSourceAgent(reader *bufio.Reader) (string, error) {
+	fmt.Println("\nSelect the source agent:")
+	for i, agent := range supportedAgents {
+		fmt.Printf("  %d) %s\n", i+1, agent)
+	}
+	for {
+		fmt.Printf("Enter choice [1-%d]: ", len(supportedAgents))
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		choice, convErr := strconv.Atoi(strings.TrimSpace(input))
+		if convErr != nil || choice < 1 || choice > len(supportedAgents) {
+			fmt.Println("Please enter a number from the list above.")
+			continue
+		}
+		return supportedAgents[choice-1], nil
+	}
+}
+
+func promptTargetAgents(reader *bufio.Reader, source string) ([]string, error) {
+	options := make([]string, 0, len(supportedAgents)-1)
+	for _, agent := range supportedAgents {
+		if agent == source {
+			continue
+		}
+		options = append(options, agent)
+	}
+	if len(options) == 0 {
+		return nil, fmt.Errorf("no target agents available for source %q", source)
+	}
+
+	fmt.Println("\nSelect target agents (enter comma-separated numbers, e.g. 1,3):")
+	for i, agent := range options {
+		fmt.Printf("  %d) %s\n", i+1, agent)
+	}
+
+	for {
+		fmt.Print("Enter one or more choices: ")
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		selections, parseErr := parseSelectionIndices(line)
+		if parseErr != nil {
+			fmt.Println(parseErr)
+			continue
+		}
+		seen := make(map[int]struct{}, len(selections))
+		var targets []string
+		valid := true
+		for _, idx := range selections {
+			if idx < 1 || idx > len(options) {
+				fmt.Printf("Selection %d is out of range. Please use numbers from the list.\n", idx)
+				valid = false
+				break
+			}
+			if _, exists := seen[idx]; exists {
+				continue
+			}
+			seen[idx] = struct{}{}
+			targets = append(targets, options[idx-1])
+		}
+		if !valid {
+			continue
+		}
+		if len(targets) == 0 {
+			fmt.Println("Please select at least one target agent.")
+			continue
+		}
+		return targets, nil
+	}
+}
+
+func promptTemplatePath(reader *bufio.Reader) (string, error) {
+	fmt.Println("\nProvide the path to the source template file:")
+	for {
+		fmt.Print("Template path: ")
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			fmt.Println("Template path cannot be empty.")
+			continue
+		}
+		return trimmed, nil
+	}
+}
+
+func parseSelectionIndices(input string) ([]int, error) {
+	trimmed := strings.TrimSpace(input)
+	if trimmed == "" {
+		return nil, fmt.Errorf("Please enter at least one selection.")
+	}
+	segments := strings.FieldsFunc(trimmed, func(r rune) bool {
+		return r == ',' || unicode.IsSpace(r)
+	})
+	if len(segments) == 0 {
+		return nil, fmt.Errorf("Please enter at least one selection.")
+	}
+	var selections []int
+	for _, segment := range segments {
+		value, err := strconv.Atoi(segment)
+		if err != nil {
+			return nil, fmt.Errorf("%q is not a valid number", segment)
+		}
+		selections = append(selections, value)
+	}
+	return selections, nil
+}
+
+func writeConfigFile(path string, cfg config.Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to generate config contents: %w", err)
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("failed to ensure directory %q: %w", dir, err)
 	}
-	if err := os.WriteFile(path, []byte(defaultConfigTemplate), 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		printManualConfigInstructions(path, data)
 		return fmt.Errorf("failed to write config %q: %w", path, err)
 	}
 	return nil
+}
+
+func printManualConfigInstructions(path string, contents []byte) {
+	fmt.Fprintf(os.Stderr, "\nUnable to write the config file automatically. Please create %s with the following contents:\n\n%s\n", path, contents)
 }

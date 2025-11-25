@@ -1,0 +1,4 @@
+source: codex
+targets:
+    - gemini
+    - claudecode

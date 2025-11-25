@@ -3,3 +3,4 @@ targets:
   - gemini
   - copilot
   - claudecode
+template: /path/to/template.json

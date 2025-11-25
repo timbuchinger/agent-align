@@ -9,6 +9,7 @@ targets:
   - gemini
   - copilot
   - claudecode
+template: configs/codex.json
 ```
 
 ## Fields
@@ -18,8 +19,10 @@ targets:
   `claudecode`.
 - `targets` (sequence, required, non-empty) – a list of one or more agents to
   update from the source. Each target value must also be one of `codex`,
-  `gemini`, `copilot`, or `claudecode`. Targets may include the same value as
-  `source` if you want to regenerate that agent’s configuration as part of the
-  output.
+  `gemini`, `copilot`, or `claudecode`. Targets **cannot** include the same
+  value as `source`.
+- `template` (string, required) – the path to the file representing your source
+  agent’s configuration. Any readable path is acceptable (absolute or relative),
+  and the CLI reads this file each time it runs.
 
 Only these four agent names are supported by the current implementation.

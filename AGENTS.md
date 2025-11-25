@@ -14,6 +14,13 @@ all the agents stay in sync.
 All commits must follow Conventional Commits so the release workflow can determine
 the next semantic version automatically.
 
+## Go build cache
+
+Set the Go build cache to a writable directory before running `go build` or
+`go test`. All agents must export `GOCACHE=/tmp/server-syncer-go-cache` (or a
+similar `/tmp` path they control) so the compiler does not attempt to write to
+unwritable home directories in sandboxed environments.
+
 ## Markdown requirements
 
 All markdown changes must run through `markdownlint-cli2` and have every reported

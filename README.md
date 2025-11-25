@@ -36,6 +36,35 @@ formats required by each tool while treating one format as the source of truth.
    ./server-syncer -config server-syncer.yml
    ```
 
+## Development commands
+
+### Build
+
+```bash
+go build ./cmd/server-syncer
+```
+
+This compiles the CLI into the current directory so you can run it repeatedly
+without `go run`.
+
+### Run
+
+```bash
+go run ./cmd/server-syncer -config server-syncer.yml
+```
+
+Use `-source` or `-agents` if you need to override values in the config for a
+single run; the template path is always read from the config file.
+
+### Test
+
+```bash
+go test ./...
+```
+
+The tests cover template loading along with the syncer's validation and
+conversion logic.
+
 ## Documentation linting
 
 When editing markdown, run the lint fixer to download the tool and apply all
@@ -54,24 +83,13 @@ npx markdownlint-cli2 --fix '**/*.md'
 - Windows: `C:\ProgramData\server-syncer\config.yml`
 
 You can override this path with `-config <path>`. The file should describe the
-`source` agent and the list of `targets`; see `CONFIGURATION.md` for the schema
-and a sample layout. When a config file is present, its values are used unless
-you explicitly set `-source` or `-agents`. If no config file is found and you
-omit `-agents`, the CLI still defaults to `Copilot`, `Codex`, `ClaudeCode`, and
-`Gemini`.
+`source` agent, the list of `targets`, and the `template` path; see
+`CONFIGURATION.md` for the schema and a sample layout. Config values are used
+unless you explicitly set `-source` or `-agents`, and the template path always
+comes from the config.
 
 The tool will echo the converted configurations for each agent so you can copy
 them into the appropriate files.
-
-## Testing
-
-Run:
-
-```bash
-go test ./...
-```
-
-The unit tests cover template loading and the syncer’s validation/conversion logic.
 
 ## CI and releases
 
