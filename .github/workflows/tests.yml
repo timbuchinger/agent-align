@@ -67,3 +67,31 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: coverage-site
+
+  deploy-coverage:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: coverage-site
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload coverage site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: coverage-site
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+      - name: Announce coverage URL
+        run: echo "Coverage report: ${{ steps.deploy.outputs.page_url }}/coverage/${{ github.run_id }}/"
