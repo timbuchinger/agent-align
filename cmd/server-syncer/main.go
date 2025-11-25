@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,14 +15,35 @@ import (
 	"server-syncer/internal/syncer"
 )
 
-const defaultAgents = "Copilot,Codex,ClaudeCode,Gemini"
+const (
+	defaultAgents         = "Copilot,Codex,ClaudeCode,Gemini"
+	defaultConfigTemplate = `source: codex
+targets:
+  - gemini
+  - copilot
+  - claudecode
+`
+)
+
+var promptUser = askYes
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "init" {
+		if err := runInitCommand(os.Args[2:]); err != nil {
+			log.Fatalf("init failed: %v", err)
+		}
+		return
+	}
+
 	templatePath := flag.String("template", "", "path to the template file")
 	sourceAgent := flag.String("source", "", "source-of-truth agent name")
 	agents := flag.String("agents", "", "comma-separated list of agents to keep in sync (defaults to Copilot,Codex,ClaudeCode,Gemini)")
 	configPath := flag.String("config", defaultConfigPath(), "path to YAML configuration file describing the source and target agents")
 	flag.Parse()
+
+	if err := ensureConfigFile(*configPath); err != nil {
+		log.Fatalf("configuration unavailable: %v", err)
+	}
 
 	if *templatePath == "" {
 		flag.Usage()
@@ -94,4 +116,83 @@ func defaultConfigPath() string {
 	default:
 		return "/etc/server-syncer.yml"
 	}
+}
+
+func ensureConfigFile(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to inspect %q: %w", path, err)
+	}
+
+	prompt := fmt.Sprintf("Configuration %s not found. Create a default config? [Y/n]: ", path)
+	if !promptUser(prompt, true) {
+		return fmt.Errorf("configuration file %s is required", path)
+	}
+
+	if err := writeDefaultConfig(path); err != nil {
+		return err
+	}
+	fmt.Printf("Created configuration file at %s\n", path)
+	return nil
+}
+
+func runInitCommand(args []string) error {
+	initFlags := flag.NewFlagSet("init", flag.ExitOnError)
+	configPath := initFlags.String("config", defaultConfigPath(), "path to YAML configuration file to create")
+	if err := initFlags.Parse(args); err != nil {
+		return err
+	}
+
+	path := *configPath
+	if _, err := os.Stat(path); err == nil {
+		if !promptUser(fmt.Sprintf("Configuration already exists at %s. Overwrite? [y/N]: ", path), false) {
+			fmt.Println("Init cancelled.")
+			return nil
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("failed to inspect %q: %w", path, err)
+	}
+
+	if err := writeDefaultConfig(path); err != nil {
+		return err
+	}
+	fmt.Printf("Created configuration file at %s\n", path)
+	return nil
+}
+
+func askYes(prompt string, defaultYes bool) bool {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print(prompt)
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return defaultYes
+		}
+
+		response := strings.TrimSpace(strings.ToLower(input))
+		if response == "" {
+			return defaultYes
+		}
+
+		switch response {
+		case "y", "yes":
+			return true
+		case "n", "no":
+			return false
+		default:
+			fmt.Println("Please answer 'y' or 'n'.")
+		}
+	}
+}
+
+func writeDefaultConfig(path string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to ensure directory %q: %w", dir, err)
+	}
+	if err := os.WriteFile(path, []byte(defaultConfigTemplate), 0o644); err != nil {
+		return fmt.Errorf("failed to write config %q: %w", path, err)
+	}
+	return nil
 }
