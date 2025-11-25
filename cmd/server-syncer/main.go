@@ -40,6 +40,9 @@ func main() {
 		}
 		return
 	}
+	if err := validateCommand(os.Args); err != nil {
+		log.Fatal(err)
+	}
 
 	sourceAgent := flag.String("source", "", "source-of-truth agent name")
 	agents := flag.String("agents", "", fmt.Sprintf("comma-separated list of agents to keep in sync (defaults to %s)", defaultAgents))
@@ -401,4 +404,15 @@ func writeAgentConfig(path, content string) error {
 		return fmt.Errorf("failed to write config %q: %w", path, err)
 	}
 	return nil
+}
+
+func validateCommand(args []string) error {
+	if len(args) <= 1 {
+		return nil
+	}
+	arg := args[1]
+	if arg == "" || arg == "init" || strings.HasPrefix(arg, "-") {
+		return nil
+	}
+	return fmt.Errorf("unknown command %q. Use -h for usage or run \"init\" to create a config.", arg)
 }

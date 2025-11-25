@@ -241,3 +241,28 @@ func TestDefaultAgentsAreLowercase(t *testing.T) {
 		t.Error("defaultAgents should include vscode")
 	}
 }
+
+func TestValidateCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{"no args", []string{"server-syncer"}, false},
+		{"flag arg", []string{"server-syncer", "-config"}, false},
+		{"init command", []string{"server-syncer", "init"}, false},
+		{"invalid command", []string{"server-syncer", "help"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCommand(tt.args)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
