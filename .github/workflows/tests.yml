@@ -62,6 +62,9 @@ jobs:
           mkdir -p coverage-site
           cp coverage.html coverage-site/index.html
           printf '{"run_id": "%s", "commit": "%s"}\n' "${RUN_ID}" "${COMMIT_SHA}" > coverage-site/run.json
+      - name: Setup GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
       - name: Upload coverage artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
@@ -77,21 +80,11 @@ jobs:
       id-token: write
     environment:
       name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: github-pages
-          path: coverage-site
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-      - name: Upload coverage site
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: coverage-site
       - name: Deploy to GitHub Pages
-        id: deploy
+        id: deployment
         uses: actions/deploy-pages@v4
       - name: Announce coverage URL
-        run: echo "Coverage report: ${{ steps.deploy.outputs.page_url }}/coverage/${{ github.run_id }}/"
+        run: echo "Coverage report: ${{ steps.deployment.outputs.page_url }}"
