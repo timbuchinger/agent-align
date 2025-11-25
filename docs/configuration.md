@@ -1,13 +1,14 @@
 # Configuration Guide
 
-Server Syncer uses a YAML configuration file to define the source agent and target agents for synchronization.
+Server Syncer uses a YAML configuration file to define the source and target agents
+for synchronization.
 
 ## Configuration File Locations
 
 The configuration file is searched in the following locations:
 
 | Platform | Path |
-|----------|------|
+| --- | --- |
 | Linux | `/etc/server-syncer.yml` |
 | macOS | `/usr/local/etc/server-syncer.yml` |
 | Windows | `C:\ProgramData\server-syncer\config.yml` |
@@ -44,9 +45,10 @@ Server Syncer currently supports the following agents:
 
 ## Command Line Options
 
-When a config file is present, its values are used unless you explicitly set these flags:
+Config file values are used unless you explicitly set these flags:
 
 - `-source` - Override the source agent
 - `-agents` - Override the target agents
 
-If no config file is found and you omit `-agents`, the CLI defaults to `Copilot`, `Codex`, `ClaudeCode`, and `Gemini`.
+If no config file is found and you omit `-agents`, the CLI defaults to
+`Copilot`, `Codex`, `ClaudeCode`, and `Gemini`.
