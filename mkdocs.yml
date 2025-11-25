@@ -1,0 +1,40 @@
+site_name: Agent Align
+site_description: Documentation for Agent Align, the MCP configuration sync tool.
+site_url: https://timbuchinger.github.io/server-syncer/
+repo_name: timbuchinger/server-syncer
+repo_url: https://github.com/timbuchinger/server-syncer
+nav:
+  - Home: index.md
+  - Configuration: configuration.md
+  - Formatter Design: FORMATTER_DESIGN.md
+theme:
+  name: material
+  logo: icon-resized.png
+  favicon: icon-resized.png
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+extra_css:
+  - styles/theme.css
