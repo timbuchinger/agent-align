@@ -4,4 +4,3 @@ targets:
   - copilot
   - vscode
   - claudecode
-template: /path/to/template.json

@@ -4,8 +4,8 @@
 
 Server Syncer is a Go-based utility that keeps MCP configuration files aligned
 across coding agents such as Copilot, Codex, Claude Code, Gemini, and others.
-Provide a template file via the config, and Server Syncer converts that
-configuration into the formats required by each tool while treating one format
+Choose a source agent, and Server Syncer reads that agent’s configuration file
+to convert it into the formats required by each tool while treating one format
 as the source of truth.
 
 ## Getting Started
@@ -17,7 +17,7 @@ as the source of truth.
    go run ./cmd/server-syncer init -config ./server-syncer.yml
    ```
 
-3. Run the CLI with that config so it can read the template path and agent list:
+3. Run the CLI with that config so it can read the source agent and target list:
 
    ```bash
    go run ./cmd/server-syncer -config ./server-syncer.yml
@@ -35,8 +35,10 @@ Server Syncer looks for a YAML configuration at one of the platform-specific loc
 - **Windows**: `C:\ProgramData\server-syncer\config.yml`
 
 You can override this path with `-config <path>`. The file should describe the
-`source` agent, the list of `targets`, and the `template` path. See the
-[Configuration Guide](configuration.md) for the schema and a sample layout.
+`source` agent and the list of `targets`. Server Syncer automatically reads the
+real configuration file for the source agent (for example, `~/.codex/config.toml`
+when `source: codex`). See the [Configuration Guide](configuration.md) for the
+schema and a sample layout.
 
 ## Testing
 

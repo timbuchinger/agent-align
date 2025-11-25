@@ -13,14 +13,13 @@ func TestLoadValidConfig(t *testing.T) {
 targets:
   - gemini
   - copilot
-template: ./template.json
 `)
 
 	got, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load returned error: %v", err)
 	}
-	want := Config{Source: "codex", Targets: []string{"gemini", "copilot"}, Template: "./template.json"}
+	want := Config{Source: "codex", Targets: []string{"gemini", "copilot"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected config: %#v", got)
 	}
@@ -29,7 +28,6 @@ template: ./template.json
 func TestLoadRejectsMissingTargets(t *testing.T) {
 	path := writeConfigFile(t, `source: codex
 targets: []
-template: ./tmpl.yml
 `)
 
 	_, err := Load(path)
@@ -45,7 +43,6 @@ func TestLoadRejectsSourceAsTarget(t *testing.T) {
 	path := writeConfigFile(t, `source: copilot
 targets:
   - copilot
-template: ./tmpl.yml
 `)
 
 	_, err := Load(path)
@@ -53,21 +50,6 @@ template: ./tmpl.yml
 		t.Fatal("expected error when target matches source")
 	}
 	if !strings.Contains(err.Error(), "both source and target") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestLoadRequiresTemplate(t *testing.T) {
-	path := writeConfigFile(t, `source: codex
-targets:
-  - gemini
-`)
-
-	_, err := Load(path)
-	if err == nil {
-		t.Fatal("expected error when template missing")
-	}
-	if !strings.Contains(err.Error(), "template") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

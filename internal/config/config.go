@@ -10,9 +10,8 @@ import (
 
 // Config describes the source and target agents defined in the YAML file.
 type Config struct {
-	Source   string   `yaml:"source"`
-	Targets  []string `yaml:"targets"`
-	Template string   `yaml:"template"`
+	Source  string   `yaml:"source"`
+	Targets []string `yaml:"targets"`
 }
 
 // Load reads the YAML configuration from the given path and validates it.
@@ -30,10 +29,6 @@ func Load(path string) (Config, error) {
 	cfg.Source = normalizeAgent(cfg.Source)
 	if cfg.Source == "" {
 		return Config{}, fmt.Errorf("config at %q must define source", path)
-	}
-	cfg.Template = strings.TrimSpace(cfg.Template)
-	if cfg.Template == "" {
-		return Config{}, fmt.Errorf("config at %q must define template path", path)
 	}
 
 	cleanTargets := make([]string, 0, len(cfg.Targets))

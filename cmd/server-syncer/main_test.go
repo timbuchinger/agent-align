@@ -36,7 +36,7 @@ func TestEnsureConfigFileCreatesDefault(t *testing.T) {
 	t.Cleanup(func() { promptUser = orig })
 	origCollect := collectConfig
 	collectConfig = func() (config.Config, error) {
-		return config.Config{Source: "codex", Targets: []string{"gemini", "copilot"}, Template: "template.json"}, nil
+		return config.Config{Source: "codex", Targets: []string{"gemini", "copilot"}}, nil
 	}
 	t.Cleanup(func() { collectConfig = origCollect })
 
@@ -48,7 +48,7 @@ func TestEnsureConfigFileCreatesDefault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load created config: %v", err)
 	}
-	expected := config.Config{Source: "codex", Targets: []string{"gemini", "copilot"}, Template: "template.json"}
+	expected := config.Config{Source: "codex", Targets: []string{"gemini", "copilot"}}
 	if !reflect.DeepEqual(createdCfg, expected) {
 		t.Fatalf("config mismatch. got %#v", createdCfg)
 	}
@@ -88,7 +88,7 @@ func TestRunInitCommandOverwrite(t *testing.T) {
 	t.Cleanup(func() { promptUser = orig })
 	origCollect := collectConfig
 	collectConfig = func() (config.Config, error) {
-		return config.Config{Source: "gemini", Targets: []string{"codex"}, Template: "template.json"}, nil
+		return config.Config{Source: "gemini", Targets: []string{"codex"}}, nil
 	}
 	t.Cleanup(func() { collectConfig = origCollect })
 
@@ -100,7 +100,7 @@ func TestRunInitCommandOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
-	expected := config.Config{Source: "gemini", Targets: []string{"codex"}, Template: "template.json"}
+	expected := config.Config{Source: "gemini", Targets: []string{"codex"}}
 	if !reflect.DeepEqual(createdCfg, expected) {
 		t.Fatalf("config not overwritten. got %#v", createdCfg)
 	}
@@ -145,7 +145,7 @@ func TestRunInitCommandCreatesMissing(t *testing.T) {
 	t.Cleanup(func() { promptUser = orig })
 	origCollect := collectConfig
 	collectConfig = func() (config.Config, error) {
-		return config.Config{Source: "copilot", Targets: []string{"claudecode"}, Template: "template.json"}, nil
+		return config.Config{Source: "copilot", Targets: []string{"claudecode"}}, nil
 	}
 	t.Cleanup(func() { collectConfig = origCollect })
 
@@ -157,7 +157,7 @@ func TestRunInitCommandCreatesMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load config: %v", err)
 	}
-	expected := config.Config{Source: "copilot", Targets: []string{"claudecode"}, Template: "template.json"}
+	expected := config.Config{Source: "copilot", Targets: []string{"claudecode"}}
 	if !reflect.DeepEqual(createdCfg, expected) {
 		t.Fatalf("config mismatch. got %#v", createdCfg)
 	}
@@ -230,13 +230,6 @@ func TestParseAgents(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestDefaultConfigTemplateIncludesVSCode(t *testing.T) {
-	// Verify that the default config template includes vscode
-	if !strings.Contains(defaultConfigTemplate, "vscode") {
-		t.Error("defaultConfigTemplate should include vscode")
 	}
 }
 

@@ -14,8 +14,6 @@ import (
 	"strings"
 	"unicode"
 
-	_ "embed"
-
 	"gopkg.in/yaml.v3"
 
 	"server-syncer/internal/config"
@@ -23,14 +21,7 @@ import (
 )
 
 const (
-	defaultAgents         = "Copilot,VSCode,Codex,ClaudeCode,Gemini"
-	defaultConfigTemplate = `source: codex
-targets:
-  - gemini
-  - copilot
-  - vscode
-  - claudecode
-`
+	defaultAgents = "Copilot,VSCode,Codex,ClaudeCode,Gemini"
 )
 
 var (
@@ -51,7 +42,7 @@ func main() {
 	}
 
 	sourceAgent := flag.String("source", "", "source-of-truth agent name")
-	agents := flag.String("agents", "", "comma-separated list of agents to keep in sync (defaults to Copilot,VSCode,Codex,ClaudeCode,Gemini)")
+	agents := flag.String("agents", "", fmt.Sprintf("comma-separated list of agents to keep in sync (defaults to %s)", defaultAgents))
 	configPath := flag.String("config", defaultConfigPath(), "path to YAML configuration file describing the source and target agents")
 	dryRun := flag.Bool("dry-run", false, "only show what would be changed without applying changes")
 	confirm := flag.Bool("confirm", false, "skip user confirmation prompt (useful for cron jobs)")
@@ -90,7 +81,11 @@ func main() {
 		candidateAgents = cfg.Targets
 	}
 
-	tpl, err := syncer.LoadTemplateFromFile(cfg.Template)
+	sourceCfg, err := syncer.GetAgentConfig(finalSource)
+	if err != nil {
+		log.Fatalf("failed to locate source agent config for %s: %v", finalSource, err)
+	}
+	tpl, err := syncer.LoadTemplateFromFile(sourceCfg.FilePath)
 	if err != nil {
 		log.Fatalf("failed to load template: %v", err)
 	}
@@ -271,11 +266,7 @@ func promptForConfig() (config.Config, error) {
 	if err != nil {
 		return config.Config{}, err
 	}
-	templatePath, err := promptTemplatePath(reader)
-	if err != nil {
-		return config.Config{}, err
-	}
-	return config.Config{Source: source, Targets: targets, Template: templatePath}, nil
+	return config.Config{Source: source, Targets: targets}, nil
 }
 
 func configPromptSuffix(path string) string {
@@ -359,23 +350,6 @@ func promptTargetAgents(reader *bufio.Reader, source string) ([]string, error) {
 	}
 }
 
-func promptTemplatePath(reader *bufio.Reader) (string, error) {
-	fmt.Println("\nProvide the path to the source template file:")
-	for {
-		fmt.Print("Template path: ")
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			fmt.Println("Template path cannot be empty.")
-			continue
-		}
-		return trimmed, nil
-	}
-}
-
 func parseSelectionIndices(input string) ([]int, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
@@ -416,6 +390,8 @@ func writeConfigFile(path string, cfg config.Config) error {
 
 func printManualConfigInstructions(path string, contents []byte) {
 	fmt.Fprintf(os.Stderr, "\nUnable to write the config file automatically. Please create %s with the following contents:\n\n%s\n", path, contents)
+}
+
 func writeAgentConfig(path, content string) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

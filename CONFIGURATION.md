@@ -10,7 +10,6 @@ targets:
   - copilot
   - vscode
   - claudecode
-template: configs/codex.json
 ```
 
 ## Fields
@@ -20,9 +19,12 @@ template: configs/codex.json
   `vscode`, and `claudecode`.
 - `targets` (sequence, required, non-empty) – a list of one or more agents to
   update from the source. Each target value must also be one of `codex`,
-  `gemini`, `copilot`, `vscode`, or `claudecode`. Targets may include the same
-  value as `source` if you want to regenerate that agent's configuration as
-  part of the output.
+  `gemini`, `copilot`, `vscode`, or `claudecode`. Targets cannot repeat the
+  value used for `source`.
+
+The CLI infers the template file from the `source` agent (for example, `codex`
+maps to `~/.codex/config.toml`). It reads that file at runtime, so there is no
+separate `template` field in the config.
 
 ## Supported Agents
 

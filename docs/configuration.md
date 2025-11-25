@@ -32,9 +32,6 @@ targets:
   - copilot
   - claudecode
   - gemini
-
-# Path to the template file that represents the source agent
-template: configs/codex.json
 ```
 
 ## Supported Agents
@@ -53,5 +50,6 @@ Config file values are used unless you explicitly set these flags:
 - `-source` - Override the source agent
 - `-agents` - Override the target agents
 
-The template path always comes from the config file, so populate `template`
-before running the CLI.
+Server Syncer reads the actual configuration file for the selected source agent
+(for example, `~/.codex/config.toml` when `source: codex`) and uses that file as
+the template automatically.
