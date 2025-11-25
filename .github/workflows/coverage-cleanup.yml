@@ -26,6 +26,7 @@ jobs:
             echo "gh-pages branch not found; nothing to prune."
             exit 0
           fi
+          rm -rf coverage
           git checkout -B gh-pages origin/gh-pages
           shopt -s nullglob
           if [ ! -d coverage ]; then
