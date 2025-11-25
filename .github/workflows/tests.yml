@@ -85,4 +85,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
       - name: Announce coverage URL
-        run: echo "Coverage report: ${{ steps.deployment.outputs.page_url }}"
+        run: 'echo "Coverage report: ${{ steps.deployment.outputs.page_url }}"'
