@@ -40,6 +40,12 @@ Set the Go build cache to a writable directory before running `go build` or
 similar `/tmp` path they control) so the compiler does not attempt to write to
 unwritable home directories in sandboxed environments.
 
+## Testing requirements
+
+Run the full test suite after making any code changes and before committing.
+Execute `go test -coverprofile=coverage.out ./...` to run all tests with coverage
+reporting. All tests must pass before changes can be committed.
+
 ## Markdown requirements
 
 All markdown changes must run through `markdownlint-cli2` and have every reported
