@@ -96,36 +96,37 @@ func New(sourceAgent string, agents []string) *Syncer {
 	}
 }
 
-func (s *Syncer) Sync(template Template) (map[string]string, error) {
+// SyncResult contains the output per agent plus the parsed server data.
+type SyncResult struct {
+	Agents  map[string]string
+	Servers map[string]interface{}
+}
+
+func (s *Syncer) Sync(template Template) (SyncResult, error) {
 	if strings.TrimSpace(template.Name) == "" {
-		return nil, fmt.Errorf("template requires a name")
+		return SyncResult{}, fmt.Errorf("template requires a name")
 	}
 	if strings.TrimSpace(template.Payload) == "" {
-		return nil, fmt.Errorf("template payload cannot be empty")
-	}
-	if len(s.Agents) == 0 {
-		return nil, fmt.Errorf("no agents configured to sync")
+		return SyncResult{}, fmt.Errorf("template payload cannot be empty")
 	}
 	if _, err := GetAgentConfig(s.SourceAgent); err != nil {
-		return nil, fmt.Errorf("source agent %q not supported: %w", s.SourceAgent, err)
+		return SyncResult{}, fmt.Errorf("source agent %q not supported: %w", s.SourceAgent, err)
+	}
+
+	servers, err := parseServersFromSource(s.SourceAgent, template.Payload)
+	if err != nil {
+		return SyncResult{}, err
 	}
 
 	result := make(map[string]string, len(s.Agents))
 	for _, agent := range s.Agents {
-		result[agent] = formatConfig(agent, s.SourceAgent, template)
+		result[agent] = formatConfig(agent, servers)
 	}
 
-	return result, nil
+	return SyncResult{Agents: result, Servers: servers}, nil
 }
 
-func formatConfig(agent, source string, template Template) string {
-	// Parse the template payload to extract MCP server definitions
-	servers, err := parseServersFromSource(source, template.Payload)
-	if err != nil {
-		// If parsing fails, return empty result
-		return ""
-	}
-
+func formatConfig(agent string, servers map[string]interface{}) string {
 	config, err := GetAgentConfig(agent)
 	if err != nil {
 		return ""

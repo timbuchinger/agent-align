@@ -177,16 +177,17 @@ type CodexConfig struct {
 The user's YAML config file (see `CONFIGURATION.md`) drives the pipeline:
 
 ```yaml
-source: codex
+sourceAgent: codex
 targets:
-  - copilot
-  - claudecode
-  - gemini
+  agents:
+    - copilot
+    - claudecode
+    - gemini
 ```
 
 The syncer will:
 
-1. Look up the source formatter via `formatter.Get(cfg.Source)`.
+1. Look up the source formatter via `formatter.Get(cfg.SourceAgent)`.
 2. Read the source agent's config file.
 3. Call `Parse()` to produce the intermediary format.
 4. For each target agent, call `Format()` and write the output.

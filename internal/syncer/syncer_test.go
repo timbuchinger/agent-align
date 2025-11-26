@@ -22,17 +22,20 @@ func TestSyncer_Sync(t *testing.T) {
 		s := New("Copilot", []string{"Copilot", "Codex", "VSCode", "ClaudeCode", "Gemini"})
 		template := Template{Name: "test-config", Payload: payload}
 
-		got, err := s.Sync(template)
+		result, err := s.Sync(template)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(got) != 5 {
-			t.Fatalf("expected 5 agents, got %d", len(got))
+		if len(result.Agents) != 5 {
+			t.Fatalf("expected 5 agents, got %d", len(result.Agents))
+		}
+		if _, ok := result.Servers["test-server"]; !ok {
+			t.Fatalf("expected servers map to include test-server")
 		}
 
 		// Verify copilot output (JSON with mcpServers)
 		var copilotData map[string]interface{}
-		if err := json.Unmarshal([]byte(got["copilot"]), &copilotData); err != nil {
+		if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
 			t.Fatalf("copilot output is not valid JSON: %v", err)
 		}
 		if _, ok := copilotData["mcpServers"]; !ok {
@@ -41,7 +44,7 @@ func TestSyncer_Sync(t *testing.T) {
 
 		// Verify vscode output (JSON with servers)
 		var vscodeData map[string]interface{}
-		if err := json.Unmarshal([]byte(got["vscode"]), &vscodeData); err != nil {
+		if err := json.Unmarshal([]byte(result.Agents["vscode"]), &vscodeData); err != nil {
 			t.Fatalf("vscode output is not valid JSON: %v", err)
 		}
 		if _, ok := vscodeData["servers"]; !ok {
@@ -49,13 +52,13 @@ func TestSyncer_Sync(t *testing.T) {
 		}
 
 		// Verify codex output (TOML format)
-		if !strings.Contains(got["codex"], "[mcp_servers.test-server]") {
-			t.Errorf("codex output should be in TOML format, got: %s", got["codex"])
+		if !strings.Contains(result.Agents["codex"], "[mcp_servers.test-server]") {
+			t.Errorf("codex output should be in TOML format, got: %s", result.Agents["codex"])
 		}
 
 		// Verify claudecode output (JSON with mcpServers)
 		var claudeData map[string]interface{}
-		if err := json.Unmarshal([]byte(got["claudecode"]), &claudeData); err != nil {
+		if err := json.Unmarshal([]byte(result.Agents["claudecode"]), &claudeData); err != nil {
 			t.Fatalf("claudecode output is not valid JSON: %v", err)
 		}
 		if _, ok := claudeData["mcpServers"]; !ok {
@@ -64,7 +67,7 @@ func TestSyncer_Sync(t *testing.T) {
 
 		// Verify gemini output (JSON with mcpServers)
 		var geminiData map[string]interface{}
-		if err := json.Unmarshal([]byte(got["gemini"]), &geminiData); err != nil {
+		if err := json.Unmarshal([]byte(result.Agents["gemini"]), &geminiData); err != nil {
 			t.Fatalf("gemini output is not valid JSON: %v", err)
 		}
 		if _, ok := geminiData["mcpServers"]; !ok {
@@ -80,17 +83,17 @@ args = ["test-mcp"]`
 		s := New("Codex", []string{"Copilot", "Codex"})
 		template := Template{Name: "test-config", Payload: payload}
 
-		got, err := s.Sync(template)
+		result, err := s.Sync(template)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(got) != 2 {
-			t.Fatalf("expected 2 agents, got %d", len(got))
+		if len(result.Agents) != 2 {
+			t.Fatalf("expected 2 agents, got %d", len(result.Agents))
 		}
 
 		// Verify copilot output (JSON with mcpServers)
 		var copilotData map[string]interface{}
-		if err := json.Unmarshal([]byte(got["copilot"]), &copilotData); err != nil {
+		if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
 			t.Fatalf("copilot output is not valid JSON: %v", err)
 		}
 		if _, ok := copilotData["mcpServers"]; !ok {
@@ -98,8 +101,8 @@ args = ["test-mcp"]`
 		}
 
 		// Verify codex output (TOML format)
-		if !strings.Contains(got["codex"], "[mcp_servers.test-server]") {
-			t.Errorf("codex output should be in TOML format, got: %s", got["codex"])
+		if !strings.Contains(result.Agents["codex"], "[mcp_servers.test-server]") {
+			t.Errorf("codex output should be in TOML format, got: %s", result.Agents["codex"])
 		}
 	})
 

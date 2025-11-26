@@ -135,7 +135,13 @@ func TestWriteConfigFileCreatesPath(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nested", "agent.yml")
 
-	if err := writeConfigFile(path, config.Config{Source: "copilot", Targets: []string{"vscode"}}); err != nil {
+	cfg := config.Config{
+		SourceAgent: "copilot",
+		Targets: config.TargetsConfig{
+			Agents: []string{"vscode"},
+		},
+	}
+	if err := writeConfigFile(path, cfg); err != nil {
 		t.Fatalf("writeConfigFile failed: %v", err)
 	}
 
@@ -143,8 +149,12 @@ func TestWriteConfigFileCreatesPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read config: %v", err)
 	}
-	if !strings.Contains(string(data), "source: copilot") {
+	content := string(data)
+	if !strings.Contains(content, "sourceAgent: copilot") {
 		t.Fatalf("unexpected config contents: %s", data)
+	}
+	if !strings.Contains(content, "agents:") {
+		t.Fatalf("expected agents block in config: %s", data)
 	}
 }
 
@@ -161,7 +171,12 @@ func TestEnsureConfigFileCreatesFile(t *testing.T) {
 
 	promptUser = func(string, bool) bool { return true }
 	collectConfig = func() (config.Config, error) {
-		return config.Config{Source: "copilot", Targets: []string{"vscode"}}, nil
+		return config.Config{
+			SourceAgent: "copilot",
+			Targets: config.TargetsConfig{
+				Agents: []string{"vscode"},
+			},
+		}, nil
 	}
 
 	if err := ensureConfigFile(path); err != nil {
@@ -172,7 +187,11 @@ func TestEnsureConfigFileCreatesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read config: %v", err)
 	}
-	if !strings.Contains(string(data), "source: copilot") {
+	content := string(data)
+	if !strings.Contains(content, "sourceAgent: copilot") {
 		t.Fatalf("unexpected config contents: %s", data)
+	}
+	if !strings.Contains(content, "agents:") {
+		t.Fatalf("expected agents block in config: %s", data)
 	}
 }

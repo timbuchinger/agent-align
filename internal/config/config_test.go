@@ -9,25 +9,32 @@ import (
 )
 
 func TestLoadValidConfig(t *testing.T) {
-	path := writeConfigFile(t, `source: codex
+	path := writeConfigFile(t, `sourceAgent: codex
 targets:
-  - gemini
-  - copilot
+  agents:
+    - gemini
+    - copilot
 `)
 
 	got, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load returned error: %v", err)
 	}
-	want := Config{Source: "codex", Targets: []string{"gemini", "copilot"}}
+	want := Config{
+		SourceAgent: "codex",
+		Targets: TargetsConfig{
+			Agents: []string{"gemini", "copilot"},
+		},
+	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected config: %#v", got)
 	}
 }
 
 func TestLoadRejectsMissingTargets(t *testing.T) {
-	path := writeConfigFile(t, `source: codex
-targets: []
+	path := writeConfigFile(t, `sourceAgent: codex
+targets:
+  agents: []
 `)
 
 	_, err := Load(path)
@@ -40,9 +47,10 @@ targets: []
 }
 
 func TestLoadRejectsSourceAsTarget(t *testing.T) {
-	path := writeConfigFile(t, `source: copilot
+	path := writeConfigFile(t, `sourceAgent: copilot
 targets:
-  - copilot
+  agents:
+    - copilot
 `)
 
 	_, err := Load(path)

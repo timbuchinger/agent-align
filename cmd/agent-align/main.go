@@ -76,6 +76,7 @@ func main() {
 
 	var finalSource string
 	var candidateAgents []string
+	var additionalTargets []config.AdditionalJSONTarget
 
 	if useConfig {
 		if err := ensureConfigFile(*configPath); err != nil {
@@ -86,8 +87,9 @@ func main() {
 		if cfgErr != nil {
 			log.Fatalf("failed to load config %q: %v", *configPath, cfgErr)
 		}
-		finalSource = cfg.Source
-		candidateAgents = cfg.Targets
+		finalSource = cfg.SourceAgent
+		candidateAgents = cfg.Targets.Agents
+		additionalTargets = cfg.Targets.Additional.JSON
 	} else {
 		finalSource = strings.TrimSpace(*sourceAgent)
 		candidateAgents = parseAgents(*agents)
@@ -99,8 +101,8 @@ func main() {
 	if strings.TrimSpace(finalSource) == "" {
 		log.Fatal("source agent must be provided via a config file or -source/-agents")
 	}
-	if len(candidateAgents) == 0 {
-		log.Fatal("no target agents configured; provide them via config or -agents")
+	if len(candidateAgents) == 0 && len(additionalTargets) == 0 {
+		log.Fatal("no target agents or additional destinations configured; provide agents via config/flags or add additional targets")
 	}
 
 	sourceCfg, err := syncer.GetAgentConfig(finalSource)
@@ -114,7 +116,7 @@ func main() {
 
 	s := syncer.New(finalSource, candidateAgents)
 
-	converted, err := s.Sync(tpl)
+	syncResult, err := s.Sync(tpl)
 	if err != nil {
 		log.Fatalf("sync failed: %v", err)
 	}
@@ -124,7 +126,7 @@ func main() {
 	fmt.Println("The following configuration changes will be made:")
 	fmt.Println()
 
-	for agent, cfgContent := range converted {
+	for agent, cfgContent := range syncResult.Agents {
 		agentCfg, err := syncer.GetAgentConfig(agent)
 		if err != nil {
 			log.Printf("Warning: could not get config for agent %s: %v", agent, err)
@@ -140,6 +142,31 @@ func main() {
 			fmt.Printf("    %s\n", line)
 		}
 		fmt.Println()
+	}
+
+	if len(additionalTargets) > 0 {
+		fmt.Println("Additional destinations:")
+		for _, target := range additionalTargets {
+			fmt.Printf("Additional JSON: %s\n", target.FilePath)
+			fmt.Printf("  JSON Path: %s\n", displayJSONPath(target.JSONPath))
+			content, err := buildAdditionalJSONContent(target, syncResult.Servers)
+			if err != nil {
+				fmt.Printf("  (error preparing content: %v)\n\n", err)
+				continue
+			}
+			content = strings.TrimRight(content, "\n")
+			if content == "" {
+				fmt.Println("  Content: <empty>")
+				fmt.Println()
+				continue
+			}
+			fmt.Println("  Content:")
+			lines := strings.Split(content, "\n")
+			for _, line := range lines {
+				fmt.Printf("    %s\n", line)
+			}
+			fmt.Println()
+		}
 	}
 
 	// If dry-run mode, exit without making changes
@@ -158,7 +185,7 @@ func main() {
 
 	// Apply the changes
 	fmt.Println("\nApplying changes...")
-	for agent, cfgContent := range converted {
+	for agent, cfgContent := range syncResult.Agents {
 		agentCfg, err := syncer.GetAgentConfig(agent)
 		if err != nil {
 			log.Printf("Warning: could not get config for agent %s: %v", agent, err)
@@ -170,6 +197,22 @@ func main() {
 			continue
 		}
 		fmt.Printf("  Updated: %s\n", agentCfg.FilePath)
+	}
+
+	for _, target := range additionalTargets {
+		content, err := buildAdditionalJSONContent(target, syncResult.Servers)
+		if err != nil {
+			log.Printf("Error preparing additional JSON %s: %v", target.FilePath, err)
+			continue
+		}
+		if err := writeAgentConfig(target.FilePath, content); err != nil {
+			log.Printf("Error writing additional JSON %s: %v", target.FilePath, err)
+			continue
+		}
+		fmt.Printf("  Updated additional JSON: %s\n", target.FilePath)
+		if target.JSONPath != "" {
+			fmt.Printf("    JSON Path: %s\n", target.JSONPath)
+		}
 	}
 	fmt.Println("\nConfiguration sync complete.")
 }
@@ -288,7 +331,12 @@ func promptForConfig() (config.Config, error) {
 	if err != nil {
 		return config.Config{}, err
 	}
-	return config.Config{Source: source, Targets: targets}, nil
+	return config.Config{
+		SourceAgent: source,
+		Targets: config.TargetsConfig{
+			Agents: targets,
+		},
+	}, nil
 }
 
 func configPromptSuffix(path string) string {

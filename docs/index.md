@@ -35,9 +35,11 @@ Agent Align looks for a YAML configuration at one of the platform-specific locat
 - **Windows**: `C:\ProgramData\agent-align\config.yml`
 
 You can override this path with `-config <path>`. The file should describe the
-`source` agent and the list of `targets`. Agent Align automatically reads the
-real configuration file for the source agent (for example, `~/.codex/config.toml`
-when `source: codex`). See the [Configuration Guide](configuration.md) for the
+`sourceAgent` and the `targets` block; use `targets.agents` for the supported
+agents and add `targets.additional.json` entries to mirror the servers into
+other JSON files. Agent Align automatically reads the real configuration file
+for the source agent (for example, `~/.codex/config.toml` when
+`sourceAgent: codex`). See the [Configuration Guide](configuration.md) for the
 schema and a sample layout.
 
 ## Testing

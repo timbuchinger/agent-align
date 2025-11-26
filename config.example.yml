@@ -1,6 +1,11 @@
-source: codex
+sourceAgent: codex
 targets:
-  - gemini
-  - copilot
-  - vscode
-  - claudecode
+  agents:
+    - gemini
+    - copilot
+    - vscode
+    - claudecode
+  additional:
+    json:
+      - filePath: path/to/additional_targets.json
+        jsonPath: .mcpServers

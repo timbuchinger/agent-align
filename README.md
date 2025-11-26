@@ -24,12 +24,13 @@ of truth. Detailed documentation is hosted on GitHub Pages at
 2. Create a config; for example, save this to `agent-align.yml` next to the binary:
 
    ```yaml
-   source: codex
+   sourceAgent: codex
    targets:
-     - copilot
-     - vscode
-     - claudecode
-     - gemini
+     agents:
+       - copilot
+       - vscode
+       - claudecode
+       - gemini
    ```
 
 3. Run the app with your config file:
@@ -117,15 +118,18 @@ npx markdownlint-cli2 --fix '**/*.md'
 - Windows: `C:\ProgramData\agent-align\config.yml`
 
 You can override this path with `-config <path>`. The file should describe the
-`source` agent and the list of `targets`; see `CONFIGURATION.md` for the schema
-and a sample layout. Config values are used unless you explicitly set both
-`-source` and `-agents`. The CLI reads the actual configuration file for the
-selected source agent (for example, `~/.codex/config.toml` when `source: codex`)
-and uses it as the template automatically. If you provide `-source` and
-`-agents`, the config file is ignored entirely and the CLI runs in a flag-only
-mode. These flags cannot be combined with `-config`. If no config file is found
-and you omit the CLI overrides, the CLI still defaults to `copilot`, `vscode`,
-`codex`, `claudecode`, and `gemini`.
+`sourceAgent` that acts as the source of truth and the `targets` block that
+drives updates. Use `targets.agents` to list the supported agent names and add
+entries under `targets.additional.json` to mirror the MCP payload into other
+JSON files (each entry specifies `filePath` and the `jsonPath` where the servers
+belong). See `CONFIGURATION.md` for the schema and examples. Config values are
+used unless you explicitly set both `-source` and `-agents`. The CLI reads the
+actual configuration file for the selected source agent (for example,
+`~/.codex/config.toml` when `sourceAgent: codex`) and uses it as the template
+automatically. If you provide `-source` and `-agents`, the config file is ignored
+entirely and the CLI runs in a flag-only mode. These flags cannot be combined
+with `-config`. If no config file is found and you omit the CLI overrides, the
+CLI still defaults to `copilot`, `vscode`, `codex`, `claudecode`, and `gemini`.
 
 The tool will display the converted configurations for each agent and prompt
 for confirmation before writing the changes (unless `-confirm` is specified).
