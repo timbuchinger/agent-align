@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -347,12 +348,14 @@ func configPromptSuffix(path string) string {
 }
 
 func promptSourceAgent(reader *bufio.Reader) (string, error) {
+	displayAgents := append([]string{}, supportedAgents...)
+	sort.Strings(displayAgents)
 	fmt.Println("\nSelect the source agent:")
-	for i, agent := range supportedAgents {
+	for i, agent := range displayAgents {
 		fmt.Printf("  %d) %s\n", i+1, agent)
 	}
 	for {
-		fmt.Printf("Enter choice [1-%d]: ", len(supportedAgents))
+		fmt.Printf("Enter choice [1-%d]: ", len(displayAgents))
 		input, err := reader.ReadString('\n')
 		if err != nil {
 			return "", err
@@ -378,6 +381,7 @@ func promptTargetAgents(reader *bufio.Reader, source string) ([]string, error) {
 		return nil, fmt.Errorf("no target agents available for source %q", source)
 	}
 
+	sort.Strings(options)
 	fmt.Println("\nSelect target agents (enter comma-separated numbers, e.g. 1,3):")
 	for i, agent := range options {
 		fmt.Printf("  %d) %s\n", i+1, agent)
