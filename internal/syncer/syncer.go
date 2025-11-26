@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"agent-align/internal/transforms"
 )
 
 type Template struct {
@@ -120,10 +122,35 @@ func (s *Syncer) Sync(template Template) (SyncResult, error) {
 
 	result := make(map[string]string, len(s.Agents))
 	for _, agent := range s.Agents {
-		result[agent] = formatConfig(agent, servers)
+		// Deep copy servers for each agent to avoid cross-agent transformation interference
+		agentServers := deepCopyServers(servers)
+
+		// Apply agent-specific transformations
+		transformer := transforms.GetTransformer(agent)
+		if err := transformer.Transform(agentServers); err != nil {
+			return SyncResult{}, err
+		}
+
+		result[agent] = formatConfig(agent, agentServers)
 	}
 
 	return SyncResult{Agents: result, Servers: servers}, nil
+}
+
+// deepCopyServers creates a deep copy of the servers map to avoid
+// transformations from one agent affecting another.
+func deepCopyServers(servers map[string]interface{}) map[string]interface{} {
+	// Use JSON marshal/unmarshal for deep copy
+	data, err := json.Marshal(servers)
+	if err != nil {
+		// If marshaling fails, return an empty map
+		return make(map[string]interface{})
+	}
+	var copy map[string]interface{}
+	if err := json.Unmarshal(data, &copy); err != nil {
+		return make(map[string]interface{})
+	}
+	return copy
 }
 
 func formatConfig(agent string, servers map[string]interface{}) string {

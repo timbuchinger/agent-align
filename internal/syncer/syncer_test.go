@@ -327,3 +327,233 @@ func TestParseTOMLArray(t *testing.T) {
 		})
 	}
 }
+
+func TestSyncer_CopilotTransformAddToolsArray(t *testing.T) {
+	// Test that copilot output includes tools array for command servers
+	payload := `{
+		"mcpServers": {
+			"test-server": {
+				"command": "npx",
+				"args": ["test-mcp"]
+			}
+		}
+	}`
+	s := New("copilot", []string{"copilot", "vscode"})
+	template := Template{Name: "test-config", Payload: payload}
+
+	result, err := s.Sync(template)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Parse copilot output and verify tools array was added
+	var copilotData map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
+		t.Fatalf("copilot output is not valid JSON: %v", err)
+	}
+
+	mcpServers, ok := copilotData["mcpServers"].(map[string]interface{})
+	if !ok {
+		t.Fatal("copilot output missing mcpServers")
+	}
+
+	server, ok := mcpServers["test-server"].(map[string]interface{})
+	if !ok {
+		t.Fatal("copilot output missing test-server")
+	}
+
+	tools, hasTools := server["tools"]
+	if !hasTools {
+		t.Fatal("copilot server should have tools array added")
+	}
+
+	toolsArr, ok := tools.([]interface{})
+	if !ok {
+		t.Fatalf("tools should be an array, got %T", tools)
+	}
+	if len(toolsArr) != 0 {
+		t.Errorf("tools array should be empty, got %v", toolsArr)
+	}
+
+	// Verify vscode output does NOT have tools array added (no transformation)
+	var vscodeData map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Agents["vscode"]), &vscodeData); err != nil {
+		t.Fatalf("vscode output is not valid JSON: %v", err)
+	}
+
+	vscodeServers, ok := vscodeData["servers"].(map[string]interface{})
+	if !ok {
+		t.Fatal("vscode output missing servers")
+	}
+
+	vscodeServer, ok := vscodeServers["test-server"].(map[string]interface{})
+	if !ok {
+		t.Fatal("vscode output missing test-server")
+	}
+
+	if _, hasTools := vscodeServer["tools"]; hasTools {
+		t.Error("vscode server should NOT have tools array (no transformation)")
+	}
+}
+
+func TestSyncer_CopilotTransformPreservesExistingTools(t *testing.T) {
+	// Test that copilot output preserves existing tools array
+	payload := `{
+		"mcpServers": {
+			"test-server": {
+				"command": "npx",
+				"args": ["test-mcp"],
+				"tools": ["existing-tool"]
+			}
+		}
+	}`
+	s := New("copilot", []string{"copilot"})
+	template := Template{Name: "test-config", Payload: payload}
+
+	result, err := s.Sync(template)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var copilotData map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
+		t.Fatalf("copilot output is not valid JSON: %v", err)
+	}
+
+	mcpServers, ok := copilotData["mcpServers"].(map[string]interface{})
+	if !ok {
+		t.Fatal("copilot output missing mcpServers")
+	}
+
+	server, ok := mcpServers["test-server"].(map[string]interface{})
+	if !ok {
+		t.Fatal("copilot output missing test-server")
+	}
+
+	tools, hasTools := server["tools"]
+	if !hasTools {
+		t.Fatal("copilot server should have tools array")
+	}
+
+	toolsArr, ok := tools.([]interface{})
+	if !ok {
+		t.Fatalf("tools should be an array, got %T", tools)
+	}
+	if len(toolsArr) != 1 {
+		t.Errorf("tools array should have 1 element, got %d", len(toolsArr))
+	}
+}
+
+func TestSyncer_CopilotNetworkServerValidation(t *testing.T) {
+	// Test that copilot validation fails for network servers missing required fields
+	testCases := []struct {
+		name        string
+		payload     string
+		shouldError bool
+		errContains string
+	}{
+		{
+			name: "valid network server",
+			payload: `{
+				"mcpServers": {
+					"network-server": {
+						"type": "sse",
+						"url": "https://example.com/sse"
+					}
+				}
+			}`,
+			shouldError: false,
+		},
+		{
+			name: "network server missing url",
+			payload: `{
+				"mcpServers": {
+					"network-server": {
+						"type": "http"
+					}
+				}
+			}`,
+			shouldError: true,
+			errContains: "url",
+		},
+		{
+			name: "network server missing type",
+			payload: `{
+				"mcpServers": {
+					"network-server": {
+						"url": "https://example.com/api"
+					}
+				}
+			}`,
+			shouldError: true,
+			errContains: "type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := New("copilot", []string{"copilot"})
+			template := Template{Name: "test-config", Payload: tc.payload}
+
+			_, err := s.Sync(template)
+			if tc.shouldError {
+				if err == nil {
+					t.Fatal("expected error for invalid network server")
+				}
+				if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.errContains)) {
+					t.Errorf("error should mention %q, got: %v", tc.errContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestSyncer_CopilotTransformDoesNotAffectOtherAgents(t *testing.T) {
+	// Test that copilot transformation does not affect other agents
+	payload := `{
+		"mcpServers": {
+			"cmd-server": {
+				"command": "npx",
+				"args": ["test"]
+			}
+		}
+	}`
+	s := New("copilot", []string{"copilot", "vscode", "claudecode"})
+	template := Template{Name: "test-config", Payload: payload}
+
+	result, err := s.Sync(template)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Copilot should have tools added
+	var copilotData map[string]interface{}
+	json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData)
+	copilotServers := copilotData["mcpServers"].(map[string]interface{})
+	copilotServer := copilotServers["cmd-server"].(map[string]interface{})
+	if _, hasTools := copilotServer["tools"]; !hasTools {
+		t.Error("copilot should have tools array")
+	}
+
+	// VSCode should NOT have tools added
+	var vscodeData map[string]interface{}
+	json.Unmarshal([]byte(result.Agents["vscode"]), &vscodeData)
+	vscodeServers := vscodeData["servers"].(map[string]interface{})
+	vscodeServer := vscodeServers["cmd-server"].(map[string]interface{})
+	if _, hasTools := vscodeServer["tools"]; hasTools {
+		t.Error("vscode should NOT have tools array")
+	}
+
+	// ClaudeCode should NOT have tools added
+	var claudeData map[string]interface{}
+	json.Unmarshal([]byte(result.Agents["claudecode"]), &claudeData)
+	claudeServers := claudeData["mcpServers"].(map[string]interface{})
+	claudeServer := claudeServers["cmd-server"].(map[string]interface{})
+	if _, hasTools := claudeServer["tools"]; hasTools {
+		t.Error("claudecode should NOT have tools array")
+	}
+}
