@@ -422,11 +422,11 @@ func promptSourceAgent(reader *bufio.Reader) (string, error) {
 			return "", err
 		}
 		choice, convErr := strconv.Atoi(strings.TrimSpace(input))
-		if convErr != nil || choice < 1 || choice > len(supportedAgents) {
+		if convErr != nil || choice < 1 || choice > len(displayAgents) {
 			fmt.Println("Please enter a number from the list above.")
 			continue
 		}
-		return supportedAgents[choice-1], nil
+		return displayAgents[choice-1], nil
 	}
 }
 
