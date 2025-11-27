@@ -126,6 +126,77 @@ font_size = 12
 	}
 }
 
+func TestFormatGeminiConfigPreservesExistingSettings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	existing := `{
+  "theme": "dark",
+  "nested": {
+    "enabled": true
+  },
+  "mcpServers": {
+    "old": {
+      "command": "node"
+    }
+  }
+}`
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatalf("failed to write existing config: %v", err)
+	}
+
+	servers := map[string]interface{}{
+		"new": map[string]interface{}{
+			"command": "npx",
+		},
+	}
+	cfg := AgentConfig{Name: "gemini", FilePath: path, NodeName: "mcpServers", Format: "json"}
+	result := formatConfig(cfg, servers)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("result not valid JSON: %v", err)
+	}
+	if parsed["theme"] != "dark" {
+		t.Fatalf("theme should be preserved, got %v", parsed["theme"])
+	}
+	nested, ok := parsed["nested"].(map[string]interface{})
+	if !ok || nested["enabled"] != true {
+		t.Fatalf("nested settings should be preserved, got %v", parsed["nested"])
+	}
+	mcpServers, ok := parsed["mcpServers"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mcpServers missing in output: %v", parsed)
+	}
+	if _, ok := mcpServers["new"]; !ok {
+		t.Fatal("new server should be present in mcpServers block")
+	}
+	if _, ok := mcpServers["old"]; ok {
+		t.Fatal("old server should have been replaced")
+	}
+}
+
+func TestFormatGeminiConfigWithoutExistingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	servers := map[string]interface{}{
+		"server": map[string]interface{}{
+			"command": "npx",
+		},
+	}
+	cfg := AgentConfig{Name: "gemini", FilePath: path, NodeName: "mcpServers", Format: "json"}
+	result := formatConfig(cfg, servers)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("result not valid JSON: %v", err)
+	}
+	if len(parsed) != 1 {
+		t.Fatalf("expected only mcpServers key, got %v", parsed)
+	}
+	if _, ok := parsed["mcpServers"]; !ok {
+		t.Fatal("mcpServers key missing")
+	}
+}
+
 func TestParseServersFromJSON_WholePayload(t *testing.T) {
 	payload := `{"server1": {"command": "npx"}}`
 	got, err := parseServersFromJSON("", payload)

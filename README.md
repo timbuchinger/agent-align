@@ -128,6 +128,11 @@ reported fixes:
 npx markdownlint-cli2 --fix '**/*.md'
 ```
 
+Note: Internal design notes and maintenance docs (for example, formatter
+design and test-coverage TODOs) have been moved to `internal/docs/` so the
+`docs/` folder contains only user-facing documentation used by the published
+site.
+
 ## Configuration file
 
 `agent-align` looks for a YAML configuration at one of the platform-specific locations:

@@ -164,7 +164,13 @@ func formatConfig(config AgentConfig, servers map[string]interface{}) string {
 	if config.Format == "toml" {
 		return formatCodexConfig(config, servers)
 	}
-	return formatToJSON(config.NodeName, servers)
+
+	switch config.Name {
+	case "gemini":
+		return formatGeminiConfig(config, servers)
+	default:
+		return formatToJSON(config.NodeName, servers)
+	}
 }
 
 // parseServersFromSource extracts MCP server definitions from the source template
@@ -383,6 +389,25 @@ func parseTOMLArray(value string) []string {
 }
 
 // formatToJSON converts servers to JSON format with the specified node name
+func formatGeminiConfig(cfg AgentConfig, servers map[string]interface{}) string {
+	var existing map[string]interface{}
+	if data, err := os.ReadFile(cfg.FilePath); err == nil {
+		if err := json.Unmarshal(data, &existing); err != nil {
+			existing = make(map[string]interface{})
+		}
+	}
+	if existing == nil {
+		existing = make(map[string]interface{})
+	}
+
+	existing[cfg.NodeName] = servers
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 func formatToJSON(nodeName string, servers map[string]interface{}) string {
 	var output map[string]interface{}
 	if nodeName != "" {

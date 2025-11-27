@@ -3,5 +3,6 @@ module.exports = {
   ignores: [
     (message) => message.startsWith("Merge branch "),
     (message) => message === "Initial plan",
+    (message) => message === "input: Initial plan",
   ],
 };
