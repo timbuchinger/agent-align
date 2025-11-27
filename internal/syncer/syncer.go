@@ -5,64 +5,92 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
 	"agent-align/internal/transforms"
 )
 
-type Template struct {
-	Name    string
-	Payload string
+// AgentTarget allows overrides for an agent destination.
+type AgentTarget struct {
+	Name         string
+	PathOverride string
 }
 
 // AgentConfig holds information about an agent's configuration file.
 type AgentConfig struct {
+	Name     string // Normalized agent name
 	FilePath string // Path to the config file
 	NodeName string // Name of the node where servers are stored
 	Format   string // "json" or "toml"
 }
 
+// AgentResult is the rendered output for a single agent.
+type AgentResult struct {
+	Config  AgentConfig
+	Content string
+}
+
 // SupportedAgents returns a list of supported agent names.
 func SupportedAgents() []string {
-	return []string{"copilot", "vscode", "codex", "claudecode", "gemini"}
+	return []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode"}
 }
 
 // GetAgentConfig returns the configuration information for a given agent.
-func GetAgentConfig(agent string) (AgentConfig, error) {
+func GetAgentConfig(agent, overridePath string) (AgentConfig, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return AgentConfig{}, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	switch normalizeAgent(agent) {
+	name := normalizeAgent(agent)
+	switch name {
 	case "copilot":
 		return AgentConfig{
-			FilePath: filepath.Join(homeDir, ".copilot", "mcp-config.json"),
+			Name:     name,
+			FilePath: applyOverride(overridePath, filepath.Join(homeDir, ".copilot", "mcp-config.json")),
 			NodeName: "mcpServers",
 			Format:   "json",
 		}, nil
 	case "vscode":
 		return AgentConfig{
-			FilePath: filepath.Join(homeDir, ".config", "Code", "User", "mcp.json"),
+			Name:     name,
+			FilePath: applyOverride(overridePath, filepath.Join(homeDir, ".config", "Code", "User", "mcp.json")),
 			NodeName: "servers",
 			Format:   "json",
 		}, nil
 	case "codex":
 		return AgentConfig{
-			FilePath: filepath.Join(homeDir, ".codex", "config.toml"),
+			Name:     name,
+			FilePath: applyOverride(overridePath, filepath.Join(homeDir, ".codex", "config.toml")),
 			NodeName: "",
 			Format:   "toml",
 		}, nil
 	case "claudecode":
 		return AgentConfig{
-			FilePath: filepath.Join(homeDir, ".claude.json"),
+			Name:     name,
+			FilePath: applyOverride(overridePath, filepath.Join(homeDir, ".claude.json")),
 			NodeName: "mcpServers",
 			Format:   "json",
 		}, nil
 	case "gemini":
 		return AgentConfig{
-			FilePath: filepath.Join(homeDir, ".gemini", "settings.json"),
+			Name:     name,
+			FilePath: applyOverride(overridePath, filepath.Join(homeDir, ".gemini", "settings.json")),
+			NodeName: "mcpServers",
+			Format:   "json",
+		}, nil
+	case "kilocode":
+		var defaultPath string
+		if runtime.GOOS == "windows" {
+			defaultPath = filepath.Join(homeDir, "AppData", "Roaming", "Code", "user", "mcp.json")
+		} else {
+			defaultPath = filepath.Join(homeDir, ".config", "Code", "User", "globalStorage", "kilocode.kilo-code", "settings", "mcp_settings.json")
+		}
+		return AgentConfig{
+			Name:     name,
+			FilePath: applyOverride(overridePath, defaultPath),
 			NodeName: "mcpServers",
 			Format:   "json",
 		}, nil
@@ -71,73 +99,50 @@ func GetAgentConfig(agent string) (AgentConfig, error) {
 	}
 }
 
-func LoadTemplateFromFile(path string) (Template, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Template{}, err
-	}
-
-	payload := strings.TrimSpace(string(data))
-	return Template{
-		Name:    filepath.Base(path),
-		Payload: payload,
-	}, nil
-}
-
+// Syncer renders MCP server definitions into the supported agent formats.
 type Syncer struct {
-	SourceAgent string
-	Agents      []string
+	Agents []AgentTarget
 }
 
-func New(sourceAgent string, agents []string) *Syncer {
-	normalized := normalizeAgent(sourceAgent)
-	cleanAgents := uniqueAgents(agents)
-	return &Syncer{
-		SourceAgent: normalized,
-		Agents:      cleanAgents,
-	}
+func New(agents []AgentTarget) *Syncer {
+	return &Syncer{Agents: dedupeTargets(agents)}
 }
 
 // SyncResult contains the output per agent plus the parsed server data.
 type SyncResult struct {
-	Agents  map[string]string
+	Agents  map[string]AgentResult
 	Servers map[string]interface{}
 }
 
-func (s *Syncer) Sync(template Template) (SyncResult, error) {
-	if strings.TrimSpace(template.Name) == "" {
-		return SyncResult{}, fmt.Errorf("template requires a name")
-	}
-	if strings.TrimSpace(template.Payload) == "" {
-		return SyncResult{}, fmt.Errorf("template payload cannot be empty")
-	}
-	if _, err := GetAgentConfig(s.SourceAgent); err != nil {
-		return SyncResult{}, fmt.Errorf("source agent %q not supported: %w", s.SourceAgent, err)
+func (s *Syncer) Sync(servers map[string]interface{}) (SyncResult, error) {
+	if len(servers) == 0 {
+		return SyncResult{}, fmt.Errorf("server list cannot be empty")
 	}
 
-	servers, err := parseServersFromSource(s.SourceAgent, template.Payload)
-	if err != nil {
-		return SyncResult{}, err
-	}
-
-	result := make(map[string]string, len(s.Agents))
+	outputs := make(map[string]AgentResult, len(s.Agents))
 	for _, agent := range s.Agents {
-		// Deep copy servers for each agent to avoid cross-agent transformation interference
+		cfg, err := GetAgentConfig(agent.Name, agent.PathOverride)
+		if err != nil {
+			return SyncResult{}, fmt.Errorf("target agent %q not supported: %w", agent.Name, err)
+		}
+
 		agentServers, err := deepCopyServers(servers)
 		if err != nil {
 			return SyncResult{}, err
 		}
 
-		// Apply agent-specific transformations
-		transformer := transforms.GetTransformer(agent)
+		transformer := transforms.GetTransformer(cfg.Name)
 		if err := transformer.Transform(agentServers); err != nil {
 			return SyncResult{}, err
 		}
 
-		result[agent] = formatConfig(agent, agentServers)
+		outputs[cfg.Name] = AgentResult{
+			Config:  cfg,
+			Content: formatConfig(cfg, agentServers),
+		}
 	}
 
-	return SyncResult{Agents: result, Servers: servers}, nil
+	return SyncResult{Agents: outputs, Servers: servers}, nil
 }
 
 // deepCopyServers creates a deep copy of the servers map to avoid
@@ -155,12 +160,7 @@ func deepCopyServers(servers map[string]interface{}) (map[string]interface{}, er
 	return copy, nil
 }
 
-func formatConfig(agent string, servers map[string]interface{}) string {
-	config, err := GetAgentConfig(agent)
-	if err != nil {
-		return ""
-	}
-
+func formatConfig(config AgentConfig, servers map[string]interface{}) string {
 	if config.Format == "toml" {
 		return formatCodexConfig(config, servers)
 	}
@@ -169,7 +169,7 @@ func formatConfig(agent string, servers map[string]interface{}) string {
 
 // parseServersFromSource extracts MCP server definitions from the source template
 func parseServersFromSource(source, payload string) (map[string]interface{}, error) {
-	sourceConfig, err := GetAgentConfig(source)
+	sourceConfig, err := GetAgentConfig(source, "")
 	if err != nil {
 		return nil, err
 	}
@@ -543,19 +543,29 @@ func normalizeAgent(agent string) string {
 	return strings.ToLower(strings.TrimSpace(agent))
 }
 
-func uniqueAgents(agents []string) []string {
-	seen := make(map[string]struct{}, len(agents))
-	var out []string
-	for _, agent := range agents {
-		normalized := normalizeAgent(agent)
-		if normalized == "" {
+func dedupeTargets(targets []AgentTarget) []AgentTarget {
+	seen := make(map[string]struct{}, len(targets))
+	var out []AgentTarget
+	for _, target := range targets {
+		name := normalizeAgent(target.Name)
+		if name == "" {
 			continue
 		}
-		if _, exists := seen[normalized]; exists {
+		if _, exists := seen[name]; exists {
 			continue
 		}
-		seen[normalized] = struct{}{}
-		out = append(out, normalized)
+		seen[name] = struct{}{}
+		out = append(out, AgentTarget{
+			Name:         name,
+			PathOverride: strings.TrimSpace(target.PathOverride),
+		})
 	}
 	return out
+}
+
+func applyOverride(overridePath, defaultPath string) string {
+	if trimmed := strings.TrimSpace(overridePath); trimmed != "" {
+		return trimmed
+	}
+	return defaultPath
 }

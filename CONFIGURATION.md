@@ -1,17 +1,47 @@
 # Configuration format
 
-`agent-align` reads a single YAML configuration that describes the source
-agent whose template drives synchronization and the destinations to update.
+`agent-align` reads two YAML files:
+
+1. **MCP definitions** – the source of truth for your servers (default
+   `agent-align-mcp.yml` next to the target config). This file is required.
+2. **Target config** – describes which agents to update, optional path overrides,
+   and any extra copy tasks (default `/etc/agent-align.yml`).
+
+## MCP definitions file (agent-align-mcp.yml)
+
+The MCP file lists every server in a neutral JSON-style shape:
+
+```yaml
+servers:
+  github:
+    type: streamable-http
+    url: https://api.example.com/mcp/
+    headers:
+      Authorization: "Bearer REPLACE_WITH_GITHUB_TOKEN"
+  github-cli:
+    command: npx
+    args: ["@example/mcp-server@latest"]
+```
+
+You can also use the legacy `mcpServers` key instead of `servers`. Each server
+entry is a mapping; the keys match the fields you would normally place in the
+agent-specific files (for example, `command`, `args`, `env`, `headers`,
+`alwaysAllow`, `autoApprove`, `disabled`, `tools`, `type`, and `url`).
+
+## Target config file (agent-align.yml)
+
+The target config points to the MCP file (optional if you accept the default
+path) and lists the destinations to update:
 
 ```yaml
 mcpServers:
-  sourceAgent: codex
+  configPath: agent-align-mcp.yml
   targets:
     agents:
-      - copilot
-      - vscode
-      - claudecode
-      - gemini
+      - name: copilot
+      - name: vscode
+      - name: codex
+        path: /custom/.codex/config.toml  # optional override
     additionalTargets:
       json:
         - filePath: path/to/additional_targets.json
@@ -24,25 +54,22 @@ extraTargets:
   directories:
     - source: path/to/prompts
       destinations:
-        - path: path/to/other/prompts
-          flatten: true
         - path: path/to/another/prompts
+          flatten: true
 ```
 
-## Fields
+### Fields
 
-- `mcpServers` (mapping, required) – nests the MCP sync configuration.
-  - `sourceAgent` (string, required) – the agent whose configuration acts as the
-    authoritative template. Acceptable values are `codex`, `gemini`, `copilot`,
-    `vscode`, and `claudecode`. For backward compatibility, the legacy `source`
-    field is still allowed, but new configs should reference `sourceAgent`.
-  - `targets` (mapping, required) – groups the destinations you want to update.
-  Use `targets.agents` to list the supported agents. Each name must be one of the
-  five supported agent names and cannot match `sourceAgent`. Add an optional
-  `targets.additionalTargets.json` list to mirror the MCP payload into other JSON
-  files; every entry should specify a `filePath` and may set `jsonPath` to the
-  dot-separated node where the servers belong (omit `jsonPath` to replace the
-  entire file).
+- `mcpServers` (mapping, required) – nests MCP sync settings.
+  - `configPath` (string, optional) – path to the MCP definitions file. Defaults
+    to `agent-align-mcp.yml` next to the target config when omitted.
+  - `targets` (mapping, required) – agents to write plus optional extras.
+    - `agents` (sequence, required) – list of agent names or objects with `name`
+      and optional `path` override for the destination file.
+    - `additionalTargets.json` (sequence, optional) – mirror the MCP payload
+      into other JSON files. Each entry must specify `filePath` and may set
+      `jsonPath` (dot-separated) where the servers should be placed; omit
+      `jsonPath` to replace the entire file.
 - `extraTargets` (mapping, optional) – copies additional content alongside the
   MCP sync.
   - `files` (sequence) – mirror a single source file to multiple destinations.
@@ -51,18 +78,16 @@ extraTargets:
     `destinations`. Every destination entry must specify a `path` and may set
     `flatten: true` to drop the source directory structure while copying.
 
-The CLI infers the template file from the `sourceAgent` (for example,
-`~/.codex/config.toml` when `sourceAgent: codex`). It reads that file at runtime,
-so there is no separate `template` field in the config.
+## Supported Agents and defaults
 
-## Supported Agents
+Agent | Config File | Format | Root
+----- | ----------- | ------ | ----
+copilot | `~/.copilot/mcp-config.json` | JSON | `mcpServers`
+vscode | `~/.config/Code/User/mcp.json` | JSON | `servers`
+codex | `~/.codex/config.toml` | TOML | `mcp_servers`
+claudecode | `~/.claude.json` | JSON | `mcpServers`
+gemini | `~/.gemini/settings.json` | JSON | `mcpServers`
+kilocode | `~/AppData/Roaming/Code/user/mcp.json` (Windows) or `~/.config/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` (Linux) | JSON | `mcpServers`
 
-Agent | Config File | Format | Description
------ | ----------- | ------ | -----------
-copilot | `~/.copilot/mcp-config.json` | JSON | GitHub Copilot configuration
-vscode | `~/.config/Code/User/mcp.json` | JSON | VS Code MCP configuration
-codex | `~/.codex/config.toml` | TOML | Codex CLI configuration
-claudecode | `~/.claude.json` | JSON | Claude Code configuration
-gemini | `~/.gemini/settings.json` | JSON | Gemini configuration
-
-These five agent names are supported by the current implementation.
+Every agent accepts a `path` override in `targets.agents` if your installation
+lives elsewhere.

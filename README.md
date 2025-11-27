@@ -4,55 +4,74 @@
 
 agent-align is a Go-based utility that keeps MCP configuration files aligned
 across coding agents such as Copilot, VSCode, Codex, Claude Code, Gemini, and
-others. Give it a single template file, and it will convert that configuration
-into the formats required by each tool while treating one format as the source
-of truth. Detailed documentation is hosted on GitHub Pages at
-<https://timbuchinger.github.io/agent-align/>.
+others. Define your MCP servers once in a neutral YAML file and agent-align will
+convert that configuration into the formats required by each tool while
+applying agent-specific tweaks automatically. Detailed documentation is hosted
+on GitHub Pages at <https://timbuchinger.github.io/agent-align/>.
 
 ## Repository layout
 
 - `go.mod` pins the project to Go 1.25.4.
-- `cmd/agent-align` contains the CLI entrypoint that reads a template file, chooses
-  a source-of-truth agent, and prints the converted configs for the supported
+- `cmd/agent-align` contains the CLI entrypoint that reads the MCP definitions
+  file plus the target config and prints the converted configs for the supported
   agents.
-- `internal/syncer` implements the conversion logic, template loader, and
+- `internal/syncer` implements the conversion logic, transformation layer, and
   accompanying unit tests.
 
 ## Getting started
 
 1. Download the latest binary from the [releases page](https://github.com/timbuchinger/agent-align/releases/latest).
-2. Create a config; for example, save this to `agent-align.yml` next to the binary:
+2. Create an MCP definitions file; for example, save this to
+   `agent-align-mcp.yml` next to the binary:
+
+   ```yaml
+   servers:
+     github:
+       type: streamable-http
+       url: https://api.example.com/mcp/
+       headers:
+         Authorization: "Bearer REPLACE_WITH_GITHUB_TOKEN"
+   ```
+
+3. Create a target config; for example, save this to `agent-align.yml`:
 
    ```yaml
    mcpServers:
-     sourceAgent: codex
      targets:
        agents:
          - copilot
          - vscode
+         - codex
+         - kilocode
          - claudecode
          - gemini
    ```
 
-3. Run the app with your config file:
+4. Run the app with your config files:
 
    ```bash
-   ./agent-align -config agent-align.yml
+   ./agent-align -config agent-align.yml -mcp-config agent-align-mcp.yml
    ```
 
 ## CLI Options
 
 Option | Description
 ------ | -----------
-`-source` | Source-of-truth agent name
-`-agents` | Comma-separated list of agents to sync (defaults to copilot,vscode,codex,claudecode,gemini)
-`-config` | Path to YAML configuration file
+`-agents` | Comma-separated list of agents to sync
+`-config` | Path to YAML configuration file for targets and extra copy rules
+`-mcp-config` | Path to the base MCP YAML file
 `-dry-run` | Only show what would be changed without applying changes
 `-confirm` | Skip user confirmation prompt (useful for cron jobs)
 
-Use `-source` and `-agents` together to run without a config file. Omit both
-flags (or only set `-config`) to pull values from the YAML config; the CLI
-rejects mixes of these options.
+Defaults:
+
+- Agents: `copilot,vscode,codex,claudecode,gemini,kilocode`
+- MCP config path: `agent-align-mcp.yml` in the same directory as the target config
+
+Use `-agents` to override the target list from the config file. If you omit
+`-agents`, the CLI requires a config file so it can pick up the targets and any
+path overrides. The MCP definitions are always read from the YAML file provided
+via `-mcp-config` (or the default path).
 
 ### Dry Run Mode
 
@@ -95,11 +114,10 @@ without `go run`.
 ### Run
 
 ```bash
-go run ./cmd/agent-align -config agent-align.yml
+go run ./cmd/agent-align -config agent-align.yml -mcp-config agent-align-mcp.yml
 ```
 
-Use `-source` or `-agents` if you need to override values in the config for a
-single run; the template is inferred from the selected source agent’s config.
+Use `-agents` if you need to override values in the config for a single run.
 
 ## Documentation linting
 
@@ -119,19 +137,14 @@ npx markdownlint-cli2 --fix '**/*.md'
 - Windows: `C:\ProgramData\agent-align\config.yml`
 
 You can override this path with `-config <path>`. The file should contain an
-`mcpServers` block that describes the `sourceAgent` (the template) and the
-`targets` block that drives updates. Use `targets.agents` to list the supported
-agent names and add entries under `targets.additionalTargets.json` to mirror the
-MCP payload into other JSON files (each entry specifies `filePath` and the
-`jsonPath` where the servers belong). See `CONFIGURATION.md` for the schema and
-examples. Config values are
-used unless you explicitly set both `-source` and `-agents`. The CLI reads the
-actual configuration file for the selected source agent (for example,
-`~/.codex/config.toml` when `sourceAgent: codex`) and uses it as the template
-automatically. If you provide `-source` and `-agents`, the config file is ignored
-entirely and the CLI runs in a flag-only mode. These flags cannot be combined
-with `-config`. If no config file is found and you omit the CLI overrides, the
-CLI still defaults to `copilot`, `vscode`, `codex`, `claudecode`, and `gemini`.
+`mcpServers` block with an optional `configPath` (defaults to
+`agent-align-mcp.yml` next to the config) and a `targets` block that lists the
+agents to update. Each agent entry can optionally set `path` to override the
+default location for that tool. Add entries under `targets.additionalTargets.json`
+to mirror the MCP payload into other JSON files (each entry specifies `filePath`
+and the `jsonPath` where the servers belong). See `CONFIGURATION.md` for the
+schema and examples. The MCP servers themselves live in a separate YAML file,
+and the CLI applies agent-specific transformations when writing each target.
 
 An optional top-level `extraTargets` block copies files or directories alongside
 the MCP sync. Use `extraTargets.files` to mirror a single file into multiple
@@ -149,9 +162,10 @@ Agent | Config File | Format | Node Name
 ----- | ----------- | ------ | ---------
 copilot | `~/.copilot/mcp-config.json` | JSON | `mcpServers`
 vscode | `~/.config/Code/User/mcp.json` | JSON | `servers`
-codex | `~/.codex/config.toml` | TOML | N/A
+codex | `~/.codex/config.toml` | TOML | `mcp_servers`
 claudecode | `~/.claude.json` | JSON | `mcpServers`
 gemini | `~/.gemini/settings.json` | JSON | `mcpServers`
+kilocode | `~/AppData/Roaming/Code/user/mcp.json` (Windows) or `~/.config/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` (Linux) | JSON | `mcpServers`
 
 ## Testing
 

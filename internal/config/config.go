@@ -11,15 +11,26 @@ import (
 
 // Config describes the MCP sync behavior and extra file/directory copies.
 type Config struct {
-	SourceAgent  string
-	Targets      TargetsConfig
-	ExtraTargets ExtraTargetsConfig
+	MCP          MCPConfig          `yaml:"mcpServers"`
+	ExtraTargets ExtraTargetsConfig `yaml:"extraTargets"`
+}
+
+// MCPConfig groups the MCP definition source and the target agents.
+type MCPConfig struct {
+	ConfigPath string        `yaml:"configPath"`
+	Targets    TargetsConfig `yaml:"targets"`
 }
 
 // TargetsConfig groups agent targets and additional destinations.
 type TargetsConfig struct {
-	Agents     []string          `yaml:"agents"`
+	Agents     []AgentTarget     `yaml:"agents"`
 	Additional AdditionalTargets `yaml:"additionalTargets"`
+}
+
+// AgentTarget allows overriding the destination path for an agent.
+type AgentTarget struct {
+	Name string `yaml:"name"`
+	Path string `yaml:"path,omitempty"`
 }
 
 // AdditionalTargets lists paths for JSON-style destinations.
@@ -57,6 +68,70 @@ type AdditionalJSONTarget struct {
 	JSONPath string `yaml:"jsonPath"`
 }
 
+// UnmarshalYAML lets agent targets be provided as either strings or mappings.
+func (a *AgentTarget) UnmarshalYAML(node *yaml.Node) error {
+	if node == nil {
+		return nil
+	}
+
+	switch node.Kind {
+	case yaml.ScalarNode:
+		var name string
+		if err := node.Decode(&name); err != nil {
+			return err
+		}
+		a.Name = name
+		return nil
+	case yaml.MappingNode:
+		type raw AgentTarget
+		var r raw
+		if err := node.Decode(&r); err != nil {
+			return err
+		}
+		a.Name = r.Name
+		a.Path = r.Path
+		return nil
+	default:
+		return fmt.Errorf("agent entry must be a string or mapping")
+	}
+}
+
+// UnmarshalYAML accepts both a sequence of agents and a mapping with additional targets.
+func (t *TargetsConfig) UnmarshalYAML(node *yaml.Node) error {
+	if node == nil {
+		return nil
+	}
+
+	switch node.Kind {
+	case yaml.SequenceNode:
+		var agents []AgentTarget
+		if err := node.Decode(&agents); err != nil {
+			return err
+		}
+		t.Agents = agents
+		return nil
+	case yaml.MappingNode:
+		type raw struct {
+			Agents            []AgentTarget     `yaml:"agents"`
+			Additional        AdditionalTargets `yaml:"additional"`
+			AdditionalTargets AdditionalTargets `yaml:"additionalTargets"`
+		}
+		var r raw
+		if err := node.Decode(&r); err != nil {
+			return err
+		}
+		t.Agents = r.Agents
+		if len(r.AdditionalTargets.JSON) > 0 {
+			t.Additional = r.AdditionalTargets
+		} else {
+			t.Additional = r.Additional
+		}
+		return nil
+	default:
+		return fmt.Errorf("unexpected targets format, expected sequence or mapping")
+	}
+}
+
 // Load reads the YAML configuration from the given path and validates it.
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
@@ -69,38 +144,28 @@ func Load(path string) (Config, error) {
 		return Config{}, fmt.Errorf("failed to parse config at %q: %w", path, err)
 	}
 
-	cfg.SourceAgent = normalizeAgent(cfg.SourceAgent)
-	if cfg.SourceAgent == "" {
-		return Config{}, fmt.Errorf("config at %q must define a source agent", path)
-	}
-
-	cleanAgents := make([]string, 0, len(cfg.Targets.Agents))
-	for _, target := range cfg.Targets.Agents {
-		trimmed := normalizeAgent(target)
-		if trimmed == "" {
-			continue
+	cfg.MCP.ConfigPath = strings.TrimSpace(cfg.MCP.ConfigPath)
+	if cfg.MCP.ConfigPath != "" {
+		expanded, err := expandUserPath(cfg.MCP.ConfigPath)
+		if err != nil {
+			return Config{}, fmt.Errorf("config at %q has an invalid MCP configPath %q: %w", path, cfg.MCP.ConfigPath, err)
 		}
-		cleanAgents = append(cleanAgents, trimmed)
+		cfg.MCP.ConfigPath = expanded
 	}
 
-	for _, target := range cleanAgents {
-		if target == cfg.SourceAgent {
-			return Config{}, fmt.Errorf("config at %q lists %q as both source and target; remove it from targets", path, target)
-		}
-	}
+	cfg.MCP.Targets = normalizeTargets(cfg.MCP.Targets)
 
-	cfg.Targets.Agents = cleanAgents
-	for i := range cfg.Targets.Additional.JSON {
-		cfg.Targets.Additional.JSON[i].FilePath = strings.TrimSpace(cfg.Targets.Additional.JSON[i].FilePath)
-		cfg.Targets.Additional.JSON[i].JSONPath = strings.TrimSpace(cfg.Targets.Additional.JSON[i].JSONPath)
-		if cfg.Targets.Additional.JSON[i].FilePath == "" {
+	for i := range cfg.MCP.Targets.Additional.JSON {
+		cfg.MCP.Targets.Additional.JSON[i].FilePath = strings.TrimSpace(cfg.MCP.Targets.Additional.JSON[i].FilePath)
+		cfg.MCP.Targets.Additional.JSON[i].JSONPath = strings.TrimSpace(cfg.MCP.Targets.Additional.JSON[i].JSONPath)
+		if cfg.MCP.Targets.Additional.JSON[i].FilePath == "" {
 			return Config{}, fmt.Errorf("config at %q has an additional JSON target without a filePath", path)
 		}
-		expanded, err := expandUserPath(cfg.Targets.Additional.JSON[i].FilePath)
+		expanded, err := expandUserPath(cfg.MCP.Targets.Additional.JSON[i].FilePath)
 		if err != nil {
-			return Config{}, fmt.Errorf("config at %q has an additional JSON target with invalid filePath %q: %w", path, cfg.Targets.Additional.JSON[i].FilePath, err)
+			return Config{}, fmt.Errorf("config at %q has an additional JSON target with invalid filePath %q: %w", path, cfg.MCP.Targets.Additional.JSON[i].FilePath, err)
 		}
-		cfg.Targets.Additional.JSON[i].FilePath = expanded
+		cfg.MCP.Targets.Additional.JSON[i].FilePath = expanded
 	}
 
 	for i := range cfg.ExtraTargets.Files {
@@ -162,8 +227,8 @@ func Load(path string) (Config, error) {
 		cfg.ExtraTargets.Directories[i].Destinations = routes
 	}
 
-	if len(cfg.Targets.Agents) == 0 &&
-		len(cfg.Targets.Additional.JSON) == 0 &&
+	if len(cfg.MCP.Targets.Agents) == 0 &&
+		len(cfg.MCP.Targets.Additional.JSON) == 0 &&
 		cfg.ExtraTargets.IsZero() {
 		return Config{}, fmt.Errorf("config at %q must define at least one target", path)
 	}
@@ -173,6 +238,35 @@ func Load(path string) (Config, error) {
 
 func normalizeAgent(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func normalizeTargets(targets TargetsConfig) TargetsConfig {
+	seen := make(map[string]struct{}, len(targets.Agents))
+	var agents []AgentTarget
+	for _, target := range targets.Agents {
+		name := normalizeAgent(target.Name)
+		if name == "" {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+
+		path := strings.TrimSpace(target.Path)
+		if path != "" {
+			expanded, err := expandUserPath(path)
+			if err == nil {
+				path = expanded
+			}
+		}
+		agents = append(agents, AgentTarget{
+			Name: name,
+			Path: path,
+		})
+	}
+	targets.Agents = agents
+	return targets
 }
 
 func expandUserPath(value string) (string, error) {
@@ -196,105 +290,6 @@ func expandUserPath(value string) (string, error) {
 		return filepath.Clean(filepath.Join(home, remainder)), nil
 	default:
 		return value, nil
-	}
-}
-
-// MarshalYAML outputs the nested structure with mcpServers/extraTargets.
-func (c Config) MarshalYAML() (interface{}, error) {
-	type mcpServers struct {
-		SourceAgent string        `yaml:"sourceAgent"`
-		Targets     TargetsConfig `yaml:"targets"`
-	}
-	type output struct {
-		MCPServers   mcpServers         `yaml:"mcpServers"`
-		ExtraTargets ExtraTargetsConfig `yaml:"extraTargets,omitempty"`
-	}
-	return output{
-		MCPServers: mcpServers{
-			SourceAgent: c.SourceAgent,
-			Targets:     c.Targets,
-		},
-		ExtraTargets: c.ExtraTargets,
-	}, nil
-}
-
-// UnmarshalYAML supports legacy top-level fields in addition to mcpServers.
-func (c *Config) UnmarshalYAML(node *yaml.Node) error {
-	if node == nil {
-		return nil
-	}
-
-	type mcpBlock struct {
-		Source      string        `yaml:"source"`
-		SourceAgent string        `yaml:"sourceAgent"`
-		Targets     TargetsConfig `yaml:"targets"`
-	}
-	type rawConfig struct {
-		MCPServers   *mcpBlock          `yaml:"mcpServers"`
-		Source       string             `yaml:"source"`
-		SourceAgent  string             `yaml:"sourceAgent"`
-		Targets      TargetsConfig      `yaml:"targets"`
-		ExtraTargets ExtraTargetsConfig `yaml:"extraTargets"`
-	}
-
-	var raw rawConfig
-	if err := node.Decode(&raw); err != nil {
-		return err
-	}
-
-	c.ExtraTargets = raw.ExtraTargets
-	switch {
-	case raw.MCPServers != nil:
-		c.Targets = raw.MCPServers.Targets
-		if raw.MCPServers.SourceAgent != "" {
-			c.SourceAgent = raw.MCPServers.SourceAgent
-		} else {
-			c.SourceAgent = raw.MCPServers.Source
-		}
-	default:
-		c.Targets = raw.Targets
-		if raw.SourceAgent != "" {
-			c.SourceAgent = raw.SourceAgent
-		} else {
-			c.SourceAgent = raw.Source
-		}
-	}
-	return nil
-}
-
-// UnmarshalYAML accepts both the legacy target list and the new mapping.
-func (t *TargetsConfig) UnmarshalYAML(node *yaml.Node) error {
-	if node == nil {
-		return nil
-	}
-
-	switch node.Kind {
-	case yaml.SequenceNode:
-		var agents []string
-		if err := node.Decode(&agents); err != nil {
-			return err
-		}
-		t.Agents = agents
-		return nil
-	case yaml.MappingNode:
-		type rawTargets struct {
-			Agents            []string          `yaml:"agents"`
-			Additional        AdditionalTargets `yaml:"additional"`
-			AdditionalTargets AdditionalTargets `yaml:"additionalTargets"`
-		}
-		var raw rawTargets
-		if err := node.Decode(&raw); err != nil {
-			return err
-		}
-		t.Agents = raw.Agents
-		if len(raw.AdditionalTargets.JSON) > 0 {
-			t.Additional = raw.AdditionalTargets
-		} else {
-			t.Additional = raw.Additional
-		}
-		return nil
-	default:
-		return fmt.Errorf("unexpected targets format, expected sequence or mapping")
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadMalformedYAML(t *testing.T) {
-	path := writeConfigFile(t, "source: codex\ntargets: [\n")
+	path := writeConfigFile(t, "mcpServers:\n  targets: [\n")
 
 	_, err := Load(path)
 	if err == nil {
@@ -19,24 +19,27 @@ func TestLoadMalformedYAML(t *testing.T) {
 }
 
 func TestLoadNormalizesAndTrims(t *testing.T) {
-	path := writeConfigFile(t, `source:  CoPilot
-targets:
-  -  Gemini
-  - CODEx
-  - ""
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      -  CoPilot
+      - GEMINI
+      - copilot
+      - ""
 `)
 
 	got, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load returned error: %v", err)
 	}
-	want := Config{
-		SourceAgent: "copilot",
-		Targets: TargetsConfig{
-			Agents: []string{"gemini", "codex"},
-		},
+
+	if len(got.MCP.Targets.Agents) != 2 {
+		t.Fatalf("unexpected agent count: %v", got.MCP.Targets.Agents)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("unexpected config: %#v", got)
+	if !reflect.DeepEqual(got.MCP.Targets.Agents, []AgentTarget{
+		{Name: "copilot"},
+		{Name: "gemini"},
+	}) {
+		t.Fatalf("unexpected agents: %#v", got.MCP.Targets.Agents)
 	}
 }

@@ -19,6 +19,8 @@ func GetTransformer(agent string) Transformer {
 	switch strings.ToLower(strings.TrimSpace(agent)) {
 	case "copilot":
 		return &CopilotTransformer{}
+	case "codex":
+		return &CodexTransformer{}
 	default:
 		return &NoOpTransformer{}
 	}
@@ -36,7 +38,8 @@ func (t *NoOpTransformer) Transform(servers map[string]interface{}) error {
 type CopilotTransformer struct{}
 
 // Transform applies Copilot-specific modifications:
-// - Adds an empty "tools" array to command-type servers if not present
+// - Adds an empty "tools" array to every server if not present
+// - Normalizes network transport types to the values Copilot expects
 // - Validates that network-based servers have both "type" and "url" fields
 func (t *CopilotTransformer) Transform(servers map[string]interface{}) error {
 	for name, serverRaw := range servers {
@@ -54,9 +57,15 @@ func (t *CopilotTransformer) Transform(servers map[string]interface{}) error {
 
 // transformServer applies transformations to a single server configuration.
 func (t *CopilotTransformer) transformServer(name string, server map[string]interface{}) error {
-	if isCommandServer(server) {
-		addToolsArrayIfMissing(server)
-		return nil
+	addToolsArrayIfMissing(server)
+
+	if typ, ok := server["type"].(string); ok {
+		switch strings.ToLower(strings.TrimSpace(typ)) {
+		case "stdio":
+			server["type"] = "local"
+		case "streamable-http":
+			server["type"] = "http"
+		}
 	}
 
 	if isNetworkServer(server) {
@@ -66,13 +75,6 @@ func (t *CopilotTransformer) transformServer(name string, server map[string]inte
 	}
 
 	return nil
-}
-
-// isCommandServer returns true if the server is a command-type server.
-// A command-type server has a "command" field.
-func isCommandServer(server map[string]interface{}) bool {
-	_, hasCommand := server["command"]
-	return hasCommand
 }
 
 // isNetworkServer returns true if the server appears to be a network-based server.
@@ -92,12 +94,21 @@ func addToolsArrayIfMissing(server map[string]interface{}) {
 
 // validateNetworkServer ensures that network-based servers have both "type" and "url" fields.
 func validateNetworkServer(name string, server map[string]interface{}) error {
-	_, hasType := server["type"]
+	rawType, hasType := server["type"]
 	_, hasURL := server["url"]
 
 	if !hasType && !hasURL {
 		// Not a network server, nothing to validate
 		return nil
+	}
+
+	if hasType {
+		if t, ok := rawType.(string); ok {
+			if strings.EqualFold(strings.TrimSpace(t), "local") {
+				// Copilot local transports do not require a URL.
+				return nil
+			}
+		}
 	}
 
 	var missing []string
@@ -113,5 +124,45 @@ func validateNetworkServer(name string, server map[string]interface{}) error {
 			name, strings.Join(missing, ", "))
 	}
 
+	return nil
+}
+
+// CodexTransformer applies Codex-specific conversions.
+type CodexTransformer struct{}
+
+// Transform converts GitHub Authorization headers into the env var token expected by Codex.
+func (t *CodexTransformer) Transform(servers map[string]interface{}) error {
+	githubRaw, ok := servers["github"]
+	if !ok {
+		return nil
+	}
+
+	server, ok := githubRaw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	headers, hasHeaders := server["headers"].(map[string]interface{})
+	if !hasHeaders {
+		return nil
+	}
+
+	if _, hasEnv := server["bearer_token_env_var"]; hasEnv {
+		delete(headers, "Authorization")
+		if len(headers) == 0 {
+			delete(server, "headers")
+		}
+		return nil
+	}
+
+	if _, hasAuth := headers["Authorization"]; !hasAuth {
+		return nil
+	}
+
+	server["bearer_token_env_var"] = "CODEX_GITHUB_PERSONAL_ACCESS_TOKEN"
+	delete(headers, "Authorization")
+	if len(headers) == 0 {
+		delete(server, "headers")
+	}
 	return nil
 }

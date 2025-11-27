@@ -9,11 +9,11 @@
 ## Coverage goals
 
 1. **Exercise CLI flag helpers** – write table-driven tests for `parseAgents`.
-   Cover `parseSelectionIndices`, `resolveExecutionMode`, and `validateCommand`.
-   These cases prove the basic flow control logic stays correct.
-2. **Cover the interactive helpers** – supply synthetic readers for `promptSourceAgent`.
-   Exercise `promptTargetAgents` with those inputs.
-   Assert invalid-input loops stay aligned with the expectations.
+   Cover `parseSelectionIndices` and `validateCommand` so the basic flow control
+   logic stays correct.
+2. **Cover the interactive helpers** – supply synthetic readers for
+   `promptTargetAgents`. Assert invalid-input loops stay aligned with the
+   expectations.
 3. **Test file operations** – verify `writeConfigFile` (and `ensureConfigFile`) creates
    directories/files correctly and surfaces helpful errors when writes fail.
 4. **Signal incremental progress** – rerun `go test ./...` after each earlier step.

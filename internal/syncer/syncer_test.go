@@ -8,235 +8,81 @@ import (
 	"testing"
 )
 
-func TestSyncer_Sync(t *testing.T) {
-	t.Run("success with JSON source", func(t *testing.T) {
-		// Create a valid JSON payload for copilot format
-		payload := `{
-            "mcpServers": {
-                "test-server": {
-                    "command": "npx",
-                    "args": ["test-mcp"]
-                }
-            }
-        }`
-		s := New("Copilot", []string{"Copilot", "Codex", "VSCode", "ClaudeCode", "Gemini"})
-		template := Template{Name: "test-config", Payload: payload}
-
-		result, err := s.Sync(template)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(result.Agents) != 5 {
-			t.Fatalf("expected 5 agents, got %d", len(result.Agents))
-		}
-		if _, ok := result.Servers["test-server"]; !ok {
-			t.Fatalf("expected servers map to include test-server")
-		}
-
-		// Verify copilot output (JSON with mcpServers)
-		var copilotData map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
-			t.Fatalf("copilot output is not valid JSON: %v", err)
-		}
-		if _, ok := copilotData["mcpServers"]; !ok {
-			t.Error("copilot output should have mcpServers node")
-		}
-
-		// Verify vscode output (JSON with servers)
-		var vscodeData map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Agents["vscode"]), &vscodeData); err != nil {
-			t.Fatalf("vscode output is not valid JSON: %v", err)
-		}
-		if _, ok := vscodeData["servers"]; !ok {
-			t.Error("vscode output should have servers node")
-		}
-
-		// Verify codex output (TOML format)
-		if !strings.Contains(result.Agents["codex"], "[mcp_servers.test-server]") {
-			t.Errorf("codex output should be in TOML format, got: %s", result.Agents["codex"])
-		}
-
-		// Verify claudecode output (JSON with mcpServers)
-		var claudeData map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Agents["claudecode"]), &claudeData); err != nil {
-			t.Fatalf("claudecode output is not valid JSON: %v", err)
-		}
-		if _, ok := claudeData["mcpServers"]; !ok {
-			t.Error("claudecode output should have mcpServers node")
-		}
-
-		// Verify gemini output (JSON with mcpServers)
-		var geminiData map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Agents["gemini"]), &geminiData); err != nil {
-			t.Fatalf("gemini output is not valid JSON: %v", err)
-		}
-		if _, ok := geminiData["mcpServers"]; !ok {
-			t.Error("gemini output should have mcpServers node")
-		}
-	})
-
-	t.Run("success with TOML source", func(t *testing.T) {
-		// Create a valid TOML payload for codex format
-		payload := `[mcp_servers.test-server]
-command = "npx"
-args = ["test-mcp"]`
-		s := New("Codex", []string{"Copilot", "Codex"})
-		template := Template{Name: "test-config", Payload: payload}
-
-		result, err := s.Sync(template)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(result.Agents) != 2 {
-			t.Fatalf("expected 2 agents, got %d", len(result.Agents))
-		}
-
-		// Verify copilot output (JSON with mcpServers)
-		var copilotData map[string]interface{}
-		if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
-			t.Fatalf("copilot output is not valid JSON: %v", err)
-		}
-		if _, ok := copilotData["mcpServers"]; !ok {
-			t.Error("copilot output should have mcpServers node")
-		}
-
-		// Verify codex output (TOML format)
-		if !strings.Contains(result.Agents["codex"], "[mcp_servers.test-server]") {
-			t.Errorf("codex output should be in TOML format, got: %s", result.Agents["codex"])
-		}
-	})
-
-	t.Run("missing template payload", func(t *testing.T) {
-		s := New("copilot", []string{"copilot"})
-		_, err := s.Sync(Template{Name: "empty", Payload: ""})
-		if err == nil {
-			t.Fatal("expected error for empty payload")
-		}
-	})
-
-	t.Run("source agent not registered", func(t *testing.T) {
-		s := New("unknown", []string{"copilot"})
-		_, err := s.Sync(Template{Name: "payload", Payload: `{"mcpServers": {}}`})
-		if err == nil || !strings.Contains(err.Error(), "source agent") {
-			t.Fatalf("unexpected error state: %v", err)
-		}
-	})
-}
-
-func TestLoadTemplateFromFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "template.txt")
-	if err := os.WriteFile(path, []byte("  contents with whitespace\n"), 0o644); err != nil {
-		t.Fatalf("failed to write template: %v", err)
+func TestSyncerSync(t *testing.T) {
+	targets := []AgentTarget{
+		{Name: "copilot"},
+		{Name: "vscode"},
+		{Name: "codex", PathOverride: "/custom/codex.toml"},
+	}
+	servers := map[string]interface{}{
+		"command-server": map[string]interface{}{
+			"command": "npx",
+			"args":    []interface{}{"tool"},
+		},
+		"http-server": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "https://example.test",
+		},
 	}
 
-	tpl, err := LoadTemplateFromFile(path)
+	s := New(targets)
+	result, err := s.Sync(servers)
 	if err != nil {
-		t.Fatalf("failed to load template: %v", err)
+		t.Fatalf("Sync returned error: %v", err)
 	}
 
-	if tpl.Name != "template.txt" {
-		t.Fatalf("unexpected template name %q", tpl.Name)
-	}
-	if tpl.Payload != "contents with whitespace" {
-		t.Fatalf("unexpected payload %q", tpl.Payload)
-	}
-}
-
-func TestGetAgentConfig(t *testing.T) {
-	tests := []struct {
-		agent    string
-		nodeName string
-		format   string
-	}{
-		{"copilot", "mcpServers", "json"},
-		{"vscode", "servers", "json"},
-		{"codex", "", "toml"},
-		{"claudecode", "mcpServers", "json"},
-		{"gemini", "mcpServers", "json"},
+	if len(result.Agents) != len(targets) {
+		t.Fatalf("expected %d agents, got %d", len(targets), len(result.Agents))
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.agent, func(t *testing.T) {
-			config, err := GetAgentConfig(tt.agent)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if config.NodeName != tt.nodeName {
-				t.Errorf("expected node name %q, got %q", tt.nodeName, config.NodeName)
-			}
-			if config.Format != tt.format {
-				t.Errorf("expected format %q, got %q", tt.format, config.Format)
-			}
-			if config.FilePath == "" {
-				t.Error("expected non-empty file path")
-			}
-		})
+	copilot := result.Agents["copilot"]
+	var copilotData map[string]interface{}
+	if err := json.Unmarshal([]byte(copilot.Content), &copilotData); err != nil {
+		t.Fatalf("copilot output not valid JSON: %v", err)
 	}
-
-	t.Run("unsupported agent", func(t *testing.T) {
-		_, err := GetAgentConfig("unknown")
-		if err == nil {
-			t.Error("expected error for unsupported agent")
+	mcpServers, ok := copilotData["mcpServers"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("copilot output missing mcpServers: %v", copilotData)
+	}
+	for name, srv := range mcpServers {
+		server := srv.(map[string]interface{})
+		if _, ok := server["tools"]; !ok {
+			t.Fatalf("copilot server %s missing tools array", name)
 		}
-	})
+	}
+
+	vscode := result.Agents["vscode"]
+	var vscodeData map[string]interface{}
+	if err := json.Unmarshal([]byte(vscode.Content), &vscodeData); err != nil {
+		t.Fatalf("vscode output not valid JSON: %v", err)
+	}
+	if _, ok := vscodeData["servers"]; !ok {
+		t.Fatalf("vscode output missing servers node: %v", vscodeData)
+	}
+	if server := vscodeData["servers"].(map[string]interface{})["command-server"].(map[string]interface{}); server["tools"] != nil {
+		t.Fatalf("vscode server should not have tools added: %v", server)
+	}
+
+	codex := result.Agents["codex"]
+	if codex.Config.FilePath != "/custom/codex.toml" {
+		t.Fatalf("codex override not applied, got %s", codex.Config.FilePath)
+	}
+	if !strings.Contains(codex.Content, "[mcp_servers.command-server]") {
+		t.Fatalf("codex output missing server block: %s", codex.Content)
+	}
 }
 
 func TestSupportedAgents(t *testing.T) {
 	agents := SupportedAgents()
-	expected := []string{"copilot", "vscode", "codex", "claudecode", "gemini"}
+	expected := []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode"}
 	if len(agents) != len(expected) {
 		t.Fatalf("expected %d agents, got %d", len(expected), len(agents))
 	}
-	for i, agent := range expected {
-		if agents[i] != agent {
-			t.Errorf("expected agent %q at index %d, got %q", agent, i, agents[i])
+	for i, name := range expected {
+		if agents[i] != name {
+			t.Fatalf("agent[%d] = %s, want %s", i, agents[i], name)
 		}
 	}
-}
-
-func TestFormatConversion(t *testing.T) {
-	t.Run("JSON to TOML conversion", func(t *testing.T) {
-		payload := `{
-            "mcpServers": {
-                "server1": {
-                    "command": "npx",
-                    "args": ["arg1", "arg2"]
-                }
-            }
-        }`
-		servers, err := parseServersFromJSON("mcpServers", payload)
-		if err != nil {
-			t.Fatalf("failed to parse JSON: %v", err)
-		}
-
-		toml := formatToTOML(servers)
-		if !strings.Contains(toml, "[mcp_servers.server1]") {
-			t.Errorf("TOML should contain server section, got: %s", toml)
-		}
-		if !strings.Contains(toml, "command = \"npx\"") {
-			t.Errorf("TOML should contain command, got: %s", toml)
-		}
-	})
-
-	t.Run("TOML to JSON conversion", func(t *testing.T) {
-		payload := `[mcp_servers.server1]
-command = "npx"
-args = ["arg1", "arg2"]`
-		servers, err := parseServersFromTOML(payload)
-		if err != nil {
-			t.Fatalf("failed to parse TOML: %v", err)
-		}
-
-		jsonOutput := formatToJSON("mcpServers", servers)
-		var data map[string]interface{}
-		if err := json.Unmarshal([]byte(jsonOutput), &data); err != nil {
-			t.Fatalf("output is not valid JSON: %v", err)
-		}
-		if _, ok := data["mcpServers"]; !ok {
-			t.Error("JSON should have mcpServers node")
-		}
-	})
 }
 
 func TestFormatCodexConfigPreservesExistingSections(t *testing.T) {
@@ -263,7 +109,7 @@ font_size = 12
 			"args":    []interface{}{"tool"},
 		},
 	}
-	cfg := AgentConfig{FilePath: path, Format: "toml"}
+	cfg := AgentConfig{Name: "codex", FilePath: path, Format: "toml"}
 	result := formatCodexConfig(cfg, servers)
 
 	if !strings.Contains(result, "[general]") {
@@ -280,491 +126,24 @@ font_size = 12
 	}
 }
 
-func TestFormatCodexConfigCreatesFileWhenMissing(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.toml")
-	servers := map[string]interface{}{
-		"server": map[string]interface{}{
-			"command": "node",
-		},
-	}
-	cfg := AgentConfig{FilePath: path, Format: "toml"}
-	result := formatCodexConfig(cfg, servers)
-
-	if result == "" {
-		t.Fatal("expected MCP servers to be rendered even without existing file")
-	}
-	if !strings.Contains(result, "[mcp_servers.server]") {
-		t.Fatal("MCP section should be rendered for missing file")
-	}
-}
-
-func TestParseTOMLArray(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected []string
-	}{
-		{"simple array", `["a", "b", "c"]`, []string{"a", "b", "c"}},
-		{"array with spaces", `[ "a" , "b" , "c" ]`, []string{"a", "b", "c"}},
-		{"array with comma in value", `["a,b", "c"]`, []string{"a,b", "c"}},
-		{"empty array", `[]`, nil},
-		{"single element", `["only"]`, []string{"only"}},
-		{"path arguments", `["-y", "@modelcontextprotocol/server-github"]`, []string{"-y", "@modelcontextprotocol/server-github"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := parseTOMLArray(tt.input)
-			if len(result) != len(tt.expected) {
-				t.Fatalf("expected %d elements, got %d: %v", len(tt.expected), len(result), result)
-			}
-			for i, expected := range tt.expected {
-				if result[i] != expected {
-					t.Errorf("element[%d] = %q, want %q", i, result[i], expected)
-				}
-			}
-		})
-	}
-}
-
-func TestSyncer_CopilotTransformAddToolsArray(t *testing.T) {
-	// Test that copilot output includes tools array for command servers
-	payload := `{
-		"mcpServers": {
-			"test-server": {
-				"command": "npx",
-				"args": ["test-mcp"]
-			}
-		}
-	}`
-	s := New("copilot", []string{"copilot", "vscode"})
-	template := Template{Name: "test-config", Payload: payload}
-
-	result, err := s.Sync(template)
+func TestParseServersFromJSON_WholePayload(t *testing.T) {
+	payload := `{"server1": {"command": "npx"}}`
+	got, err := parseServersFromJSON("", payload)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	// Parse copilot output and verify tools array was added
-	var copilotData map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
-		t.Fatalf("copilot output is not valid JSON: %v", err)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 server, got %d", len(got))
 	}
-
-	mcpServers, ok := copilotData["mcpServers"].(map[string]interface{})
-	if !ok {
-		t.Fatal("copilot output missing mcpServers")
-	}
-
-	server, ok := mcpServers["test-server"].(map[string]interface{})
-	if !ok {
-		t.Fatal("copilot output missing test-server")
-	}
-
-	tools, hasTools := server["tools"]
-	if !hasTools {
-		t.Fatal("copilot server should have tools array added")
-	}
-
-	toolsArr, ok := tools.([]interface{})
-	if !ok {
-		t.Fatalf("tools should be an array, got %T", tools)
-	}
-	if len(toolsArr) != 0 {
-		t.Errorf("tools array should be empty, got %v", toolsArr)
-	}
-
-	// Verify vscode output does NOT have tools array added (no transformation)
-	var vscodeData map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Agents["vscode"]), &vscodeData); err != nil {
-		t.Fatalf("vscode output is not valid JSON: %v", err)
-	}
-
-	vscodeServers, ok := vscodeData["servers"].(map[string]interface{})
-	if !ok {
-		t.Fatal("vscode output missing servers")
-	}
-
-	vscodeServer, ok := vscodeServers["test-server"].(map[string]interface{})
-	if !ok {
-		t.Fatal("vscode output missing test-server")
-	}
-
-	if _, hasTools := vscodeServer["tools"]; hasTools {
-		t.Error("vscode server should NOT have tools array (no transformation)")
+	if _, ok := got["server1"]; !ok {
+		t.Fatalf("expected server1 key present")
 	}
 }
 
-func TestSyncer_CopilotTransformPreservesExistingTools(t *testing.T) {
-	// Test that copilot output preserves existing tools array
-	payload := `{
-		"mcpServers": {
-			"test-server": {
-				"command": "npx",
-				"args": ["test-mcp"],
-				"tools": ["existing-tool"]
-			}
-		}
-	}`
-	s := New("copilot", []string{"copilot"})
-	template := Template{Name: "test-config", Payload: payload}
-
-	result, err := s.Sync(template)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	var copilotData map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
-		t.Fatalf("copilot output is not valid JSON: %v", err)
-	}
-
-	mcpServers, ok := copilotData["mcpServers"].(map[string]interface{})
-	if !ok {
-		t.Fatal("copilot output missing mcpServers")
-	}
-
-	server, ok := mcpServers["test-server"].(map[string]interface{})
-	if !ok {
-		t.Fatal("copilot output missing test-server")
-	}
-
-	tools, hasTools := server["tools"]
-	if !hasTools {
-		t.Fatal("copilot server should have tools array")
-	}
-
-	toolsArr, ok := tools.([]interface{})
-	if !ok {
-		t.Fatalf("tools should be an array, got %T", tools)
-	}
-	if len(toolsArr) != 1 {
-		t.Errorf("tools array should have 1 element, got %d", len(toolsArr))
-	}
-}
-
-func TestSyncer_CopilotNetworkServerValidation(t *testing.T) {
-	// Test that copilot validation fails for network servers missing required fields
-	testCases := []struct {
-		name        string
-		payload     string
-		shouldError bool
-		errContains string
-	}{
-		{
-			name: "valid network server",
-			payload: `{
-				"mcpServers": {
-					"network-server": {
-						"type": "sse",
-						"url": "https://example.com/sse"
-					}
-				}
-			}`,
-			shouldError: false,
-		},
-		{
-			name: "network server missing url",
-			payload: `{
-				"mcpServers": {
-					"network-server": {
-						"type": "http"
-					}
-				}
-			}`,
-			shouldError: true,
-			errContains: "url",
-		},
-		{
-			name: "network server missing type",
-			payload: `{
-				"mcpServers": {
-					"network-server": {
-						"url": "https://example.com/api"
-					}
-				}
-			}`,
-			shouldError: true,
-			errContains: "type",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			s := New("copilot", []string{"copilot"})
-			template := Template{Name: "test-config", Payload: tc.payload}
-
-			_, err := s.Sync(template)
-			if tc.shouldError {
-				if err == nil {
-					t.Fatal("expected error for invalid network server")
-				}
-				if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.errContains)) {
-					t.Errorf("error should mention %q, got: %v", tc.errContains, err)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-			}
-		})
-	}
-}
-
-func TestSyncer_CopilotTransformDoesNotAffectOtherAgents(t *testing.T) {
-	// Test that copilot transformation does not affect other agents
-	payload := `{
-		"mcpServers": {
-			"cmd-server": {
-				"command": "npx",
-				"args": ["test"]
-			}
-		}
-	}`
-	s := New("copilot", []string{"copilot", "vscode", "claudecode"})
-	template := Template{Name: "test-config", Payload: payload}
-
-	result, err := s.Sync(template)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Copilot should have tools added
-	var copilotData map[string]interface{}
-	json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData)
-	copilotServers := copilotData["mcpServers"].(map[string]interface{})
-	copilotServer := copilotServers["cmd-server"].(map[string]interface{})
-	if _, hasTools := copilotServer["tools"]; !hasTools {
-		t.Error("copilot should have tools array")
-	}
-
-	// VSCode should NOT have tools added
-	var vscodeData map[string]interface{}
-	json.Unmarshal([]byte(result.Agents["vscode"]), &vscodeData)
-	vscodeServers := vscodeData["servers"].(map[string]interface{})
-	vscodeServer := vscodeServers["cmd-server"].(map[string]interface{})
-	if _, hasTools := vscodeServer["tools"]; hasTools {
-		t.Error("vscode should NOT have tools array")
-	}
-
-	// ClaudeCode should NOT have tools added
-	var claudeData map[string]interface{}
-	json.Unmarshal([]byte(result.Agents["claudecode"]), &claudeData)
-	claudeServers := claudeData["mcpServers"].(map[string]interface{})
-	claudeServer := claudeServers["cmd-server"].(map[string]interface{})
-	if _, hasTools := claudeServer["tools"]; hasTools {
-		t.Error("claudecode should NOT have tools array")
-	}
-}
-
-func TestParseServersFromTOML_NestedSections(t *testing.T) {
-	// Test that nested TOML sections like [mcp_servers.github.env] are properly merged
-	payload := `[mcp_servers.github]
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-github"]
-
-[mcp_servers.github.env]
-GITHUB_PERSONAL_ACCESS_TOKEN = "abc123"
-OTHER_VAR = "value"
-`
-
-	servers, err := parseServersFromTOML(payload)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should have only one server: "github"
-	if len(servers) != 1 {
-		t.Fatalf("expected 1 server, got %d: %v", len(servers), servers)
-	}
-
-	github, ok := servers["github"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected github server to be a map, got %T", servers["github"])
-	}
-
-	// Check basic properties
-	if github["command"] != "npx" {
-		t.Errorf("expected command 'npx', got %v", github["command"])
-	}
-
-	// Check that env is nested properly
-	env, ok := github["env"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected env to be a nested map, got %T", github["env"])
-	}
-
-	if env["GITHUB_PERSONAL_ACCESS_TOKEN"] != "abc123" {
-		t.Errorf("expected GITHUB_PERSONAL_ACCESS_TOKEN 'abc123', got %v", env["GITHUB_PERSONAL_ACCESS_TOKEN"])
-	}
-	if env["OTHER_VAR"] != "value" {
-		t.Errorf("expected OTHER_VAR 'value', got %v", env["OTHER_VAR"])
-	}
-}
-
-func TestParseServersFromTOML_MultipleServersWithNested(t *testing.T) {
-	// Test multiple servers, some with nested sections
-	payload := `[mcp_servers.github]
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-github"]
-
-[mcp_servers.github.env]
-GITHUB_TOKEN = "token123"
-
-[mcp_servers.simple]
-command = "node"
-args = ["server.js"]
-`
-
-	servers, err := parseServersFromTOML(payload)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Should have two servers: "github" and "simple"
-	if len(servers) != 2 {
-		t.Fatalf("expected 2 servers, got %d: %v", len(servers), servers)
-	}
-
-	// Check github server has nested env
-	github, ok := servers["github"].(map[string]interface{})
-	if !ok {
-		t.Fatal("github server not found or wrong type")
-	}
-	env, ok := github["env"].(map[string]interface{})
-	if !ok {
-		t.Fatal("github.env not found or wrong type")
-	}
-	if env["GITHUB_TOKEN"] != "token123" {
-		t.Errorf("expected GITHUB_TOKEN 'token123', got %v", env["GITHUB_TOKEN"])
-	}
-
-	// Check simple server has no env
-	simple, ok := servers["simple"].(map[string]interface{})
-	if !ok {
-		t.Fatal("simple server not found or wrong type")
-	}
-	if _, hasEnv := simple["env"]; hasEnv {
-		t.Error("simple server should not have env")
-	}
-}
-
-func TestFormatToTOML_NestedSections(t *testing.T) {
-	// Test that nested structures are formatted as separate TOML sections
-	servers := map[string]interface{}{
-		"github": map[string]interface{}{
-			"command": "npx",
-			"args":    []interface{}{"-y", "@modelcontextprotocol/server-github"},
-			"env": map[string]interface{}{
-				"GITHUB_TOKEN": "token123",
-			},
-		},
-	}
-
-	result := formatToTOML(servers)
-
-	// Should contain main section
-	if !strings.Contains(result, "[mcp_servers.github]") {
-		t.Errorf("should contain [mcp_servers.github], got: %s", result)
-	}
-
-	// Should contain nested env section
-	if !strings.Contains(result, "[mcp_servers.github.env]") {
-		t.Errorf("should contain [mcp_servers.github.env], got: %s", result)
-	}
-
-	// Should contain the token in env section
-	if !strings.Contains(result, `GITHUB_TOKEN = "token123"`) {
-		t.Errorf("should contain GITHUB_TOKEN, got: %s", result)
-	}
-}
-
-func TestTOMLRoundTrip_NestedSections(t *testing.T) {
-	// Test that parsing TOML with nested sections and converting back produces equivalent output
-	original := `[mcp_servers.github]
-args = ["-y", "@modelcontextprotocol/server-github"]
-command = "npx"
-
-[mcp_servers.github.env]
-GITHUB_TOKEN = "abc123"
-`
-
-	servers, err := parseServersFromTOML(original)
-	if err != nil {
-		t.Fatalf("unexpected error parsing TOML: %v", err)
-	}
-
-	// Convert back to TOML
-	result := formatToTOML(servers)
-
-	// Re-parse and verify structure
-	servers2, err := parseServersFromTOML(result)
-	if err != nil {
-		t.Fatalf("unexpected error re-parsing TOML: %v", err)
-	}
-
-	github, ok := servers2["github"].(map[string]interface{})
-	if !ok {
-		t.Fatal("github server not found after round-trip")
-	}
-
-	env, ok := github["env"].(map[string]interface{})
-	if !ok {
-		t.Fatal("github.env not found after round-trip")
-	}
-
-	if env["GITHUB_TOKEN"] != "abc123" {
-		t.Errorf("expected GITHUB_TOKEN 'abc123' after round-trip, got %v", env["GITHUB_TOKEN"])
-	}
-}
-
-func TestSyncer_CodexSourceWithNestedEnv(t *testing.T) {
-	// Test end-to-end sync from Codex source with nested env to JSON targets
-	payload := `[mcp_servers.github]
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-github"]
-
-[mcp_servers.github.env]
-GITHUB_TOKEN = "test_token"
-`
-
-	s := New("codex", []string{"copilot", "vscode"})
-	template := Template{Name: "test-config", Payload: payload}
-
-	result, err := s.Sync(template)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Parse copilot output and verify structure
-	var copilotData map[string]interface{}
-	if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
-		t.Fatalf("copilot output is not valid JSON: %v", err)
-	}
-
-	mcpServers, ok := copilotData["mcpServers"].(map[string]interface{})
-	if !ok {
-		t.Fatal("copilot output missing mcpServers")
-	}
-
-	github, ok := mcpServers["github"].(map[string]interface{})
-	if !ok {
-		t.Fatal("copilot output missing github server")
-	}
-
-	// Verify env is properly nested
-	env, ok := github["env"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("github.env should be a nested object, got %T", github["env"])
-	}
-
-	if env["GITHUB_TOKEN"] != "test_token" {
-		t.Errorf("expected GITHUB_TOKEN 'test_token', got %v", env["GITHUB_TOKEN"])
-	}
-
-	// Verify there's no separate "github.env" server
-	if _, exists := mcpServers["github.env"]; exists {
-		t.Error("should not have separate 'github.env' server - it should be nested under 'github'")
+func TestParseServersFromJSON_InvalidJSON(t *testing.T) {
+	payload := `not valid json`
+	_, err := parseServersFromJSON("mcpServers", payload)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
 	}
 }

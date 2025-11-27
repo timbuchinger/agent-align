@@ -19,17 +19,18 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"agent-align/internal/config"
+	"agent-align/internal/mcpconfig"
 	"agent-align/internal/syncer"
 )
 
 const (
-	defaultAgents = "copilot,vscode,codex,claudecode,gemini"
+	defaultAgents = "copilot,vscode,codex,claudecode,gemini,kilocode"
 )
 
 var (
 	promptUser      = askYes
 	collectConfig   = promptForConfig
-	supportedAgents = []string{"codex", "vscode", "gemini", "copilot", "claudecode"}
+	supportedAgents = []string{"codex", "vscode", "gemini", "copilot", "claudecode", "kilocode"}
 )
 
 //go:embed config.example.yml
@@ -46,9 +47,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sourceAgent := flag.String("source", "", "source-of-truth agent name")
 	agents := flag.String("agents", "", fmt.Sprintf("comma-separated list of agents to keep in sync (defaults to %s)", defaultAgents))
-	configPath := flag.String("config", defaultConfigPath(), "path to YAML configuration file describing the source and target agents")
+	configPath := flag.String("config", defaultConfigPath(), "path to YAML configuration file describing target agents and overrides")
+	mcpConfigPath := flag.String("mcp-config", "", "path to YAML file that defines MCP servers (defaults to agent-align-mcp.yml next to the target config)")
 	dryRun := flag.Bool("dry-run", false, "only show what would be changed without applying changes")
 	confirm := flag.Bool("confirm", false, "skip user confirmation prompt (useful for cron jobs)")
 
@@ -57,6 +58,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nDefault config file location: %s\n", defaultConfigPath())
+		fmt.Fprintf(os.Stderr, "Default MCP config file location: %s\n", defaultMCPConfigPath(defaultConfigPath()))
 		fmt.Fprintf(os.Stderr, "\nExample config file:\n%s\n", exampleConfig)
 		fmt.Fprintf(os.Stderr, "Tip: add agent-align to cron for continuous syncing, e.g.:\n")
 		fmt.Fprintf(os.Stderr, "  0 * * * * agent-align -confirm >/tmp/agent-align.log 2>&1\n\n")
@@ -64,63 +66,79 @@ func main() {
 
 	flag.Parse()
 
-	var configFlagUsed bool
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "config" {
-			configFlagUsed = true
-		}
-	})
+	resolvedConfigPath := *configPath
+	resolvedMCPPath := strings.TrimSpace(*mcpConfigPath)
+	agentsFlagValue := strings.TrimSpace(*agents)
 
-	useConfig, modeErr := resolveExecutionMode(*sourceAgent, *agents, configFlagUsed)
-	if modeErr != nil {
-		log.Fatal(modeErr)
-	}
-
-	var finalSource string
-	var candidateAgents []string
+	var cfg config.Config
+	var haveConfig bool
 	var additionalTargets []config.AdditionalJSONTarget
 	var extraTargets config.ExtraTargetsConfig
+	var targetAgents []syncer.AgentTarget
 
-	if useConfig {
-		if err := ensureConfigFile(*configPath); err != nil {
+	if agentsFlagValue == "" {
+		if err := ensureConfigFile(resolvedConfigPath); err != nil {
 			log.Fatalf("configuration unavailable: %v", err)
 		}
-
-		cfg, cfgErr := config.Load(*configPath)
-		if cfgErr != nil {
-			log.Fatalf("failed to load config %q: %v", *configPath, cfgErr)
+		data, err := config.Load(resolvedConfigPath)
+		if err != nil {
+			log.Fatalf("failed to load config %q: %v", resolvedConfigPath, err)
 		}
-		finalSource = cfg.SourceAgent
-		candidateAgents = cfg.Targets.Agents
-		additionalTargets = cfg.Targets.Additional.JSON
+		cfg = data
+		haveConfig = true
+	} else if _, err := os.Stat(resolvedConfigPath); err == nil {
+		data, err := config.Load(resolvedConfigPath)
+		if err != nil {
+			log.Fatalf("failed to load config %q: %v", resolvedConfigPath, err)
+		}
+		cfg = data
+		haveConfig = true
+	}
+
+	if haveConfig {
+		additionalTargets = cfg.MCP.Targets.Additional.JSON
 		extraTargets = cfg.ExtraTargets
-	} else {
-		finalSource = strings.TrimSpace(*sourceAgent)
-		candidateAgents = parseAgents(*agents)
-		if len(candidateAgents) == 0 {
+		targetAgents = configTargetsToSyncer(cfg.MCP.Targets.Agents)
+		if resolvedMCPPath == "" {
+			resolvedMCPPath = cfg.MCP.ConfigPath
+		}
+	}
+
+	if resolvedMCPPath == "" {
+		resolvedMCPPath = defaultMCPConfigPath(resolvedConfigPath)
+	}
+
+	if agentsFlagValue != "" {
+		names := parseAgents(agentsFlagValue)
+		if len(names) == 0 {
 			log.Fatal("the -agents flag must list at least one agent")
 		}
+		overrideLookup := make(map[string]string, len(cfg.MCP.Targets.Agents))
+		for _, agent := range cfg.MCP.Targets.Agents {
+			overrideLookup[agent.Name] = agent.Path
+		}
+		targetAgents = nil
+		for _, name := range names {
+			normalized := strings.ToLower(strings.TrimSpace(name))
+			targetAgents = append(targetAgents, syncer.AgentTarget{
+				Name:         normalized,
+				PathOverride: overrideLookup[normalized],
+			})
+		}
 	}
 
-	if strings.TrimSpace(finalSource) == "" {
-		log.Fatal("source agent must be provided via a config file or -source/-agents")
-	}
-	if len(candidateAgents) == 0 && len(additionalTargets) == 0 && extraTargets.IsZero() {
+	if len(targetAgents) == 0 && len(additionalTargets) == 0 && extraTargets.IsZero() {
 		log.Fatal("no target agents, additional destinations, or extra copy targets configured; provide agents via config/flags or add extra targets")
 	}
 
-	sourceCfg, err := syncer.GetAgentConfig(finalSource)
+	servers, err := mcpconfig.Load(resolvedMCPPath)
 	if err != nil {
-		log.Fatalf("failed to locate source agent config for %s: %v", finalSource, err)
-	}
-	tpl, err := syncer.LoadTemplateFromFile(sourceCfg.FilePath)
-	if err != nil {
-		log.Fatalf("failed to load template: %v", err)
+		log.Fatalf("failed to load MCP configuration %q: %v", resolvedMCPPath, err)
 	}
 
-	s := syncer.New(finalSource, candidateAgents)
+	s := syncer.New(targetAgents)
 
-	syncResult, err := s.Sync(tpl)
+	syncResult, err := s.Sync(servers)
 	if err != nil {
 		log.Fatalf("sync failed: %v", err)
 	}
@@ -130,18 +148,20 @@ func main() {
 	fmt.Println("The following configuration changes will be made:")
 	fmt.Println()
 
-	for agent, cfgContent := range syncResult.Agents {
-		agentCfg, err := syncer.GetAgentConfig(agent)
-		if err != nil {
-			log.Printf("Warning: could not get config for agent %s: %v", agent, err)
-			continue
-		}
+	var agentNames []string
+	for name := range syncResult.Agents {
+		agentNames = append(agentNames, name)
+	}
+	sort.Strings(agentNames)
+
+	for _, agent := range agentNames {
+		output := syncResult.Agents[agent]
 		fmt.Printf("Agent: %s\n", agent)
-		fmt.Printf("  File: %s\n", agentCfg.FilePath)
-		fmt.Printf("  Format: %s\n", agentCfg.Format)
+		fmt.Printf("  File: %s\n", output.Config.FilePath)
+		fmt.Printf("  Format: %s\n", output.Config.Format)
 		fmt.Printf("  Content:\n")
 		// Indent the content for readability
-		lines := strings.Split(cfgContent, "\n")
+		lines := strings.Split(output.Content, "\n")
 		for _, line := range lines {
 			fmt.Printf("    %s\n", line)
 		}
@@ -212,18 +232,13 @@ func main() {
 
 	// Apply the changes
 	fmt.Println("\nApplying changes...")
-	for agent, cfgContent := range syncResult.Agents {
-		agentCfg, err := syncer.GetAgentConfig(agent)
-		if err != nil {
-			log.Printf("Warning: could not get config for agent %s: %v", agent, err)
-			continue
-		}
-
-		if err := writeAgentConfig(agentCfg.FilePath, cfgContent); err != nil {
+	for _, agent := range agentNames {
+		output := syncResult.Agents[agent]
+		if err := writeAgentConfig(output.Config.FilePath, output.Content); err != nil {
 			log.Printf("Error writing config for %s: %v", agent, err)
 			continue
 		}
-		fmt.Printf("  Updated: %s\n", agentCfg.FilePath)
+		fmt.Printf("  Updated: %s\n", output.Config.FilePath)
 	}
 
 	for _, target := range additionalTargets {
@@ -283,6 +298,17 @@ func parseAgents(agents string) []string {
 	return out
 }
 
+func configTargetsToSyncer(targets []config.AgentTarget) []syncer.AgentTarget {
+	out := make([]syncer.AgentTarget, 0, len(targets))
+	for _, target := range targets {
+		out = append(out, syncer.AgentTarget{
+			Name:         target.Name,
+			PathOverride: target.Path,
+		})
+	}
+	return out
+}
+
 func defaultConfigPath() string {
 	switch runtime.GOOS {
 	case "darwin":
@@ -295,6 +321,14 @@ func defaultConfigPath() string {
 	default:
 		return "/etc/agent-align.yml"
 	}
+}
+
+func defaultMCPConfigPath(configPath string) string {
+	dir := filepath.Dir(configPath)
+	if dir == "" {
+		return "agent-align-mcp.yml"
+	}
+	return filepath.Join(dir, "agent-align-mcp.yml")
 }
 
 func ensureConfigFile(path string) error {
@@ -376,11 +410,7 @@ func askYes(prompt string, defaultYes bool) bool {
 func promptForConfig() (config.Config, error) {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("\nLet's create your agent-align configuration.")
-	source, err := promptSourceAgent(reader)
-	if err != nil {
-		return config.Config{}, err
-	}
-	targets, err := promptTargetAgents(reader, source)
+	targets, err := promptTargetAgents(reader)
 	if err != nil {
 		return config.Config{}, err
 	}
@@ -393,10 +423,11 @@ func promptForConfig() (config.Config, error) {
 		additional.JSON = additionalJSON
 	}
 	return config.Config{
-		SourceAgent: source,
-		Targets: config.TargetsConfig{
-			Agents:     targets,
-			Additional: additional,
+		MCP: config.MCPConfig{
+			Targets: config.TargetsConfig{
+				Agents:     targets,
+				Additional: additional,
+			},
 		},
 	}, nil
 }
@@ -408,39 +439,8 @@ func configPromptSuffix(path string) string {
 	return ""
 }
 
-func promptSourceAgent(reader *bufio.Reader) (string, error) {
-	displayAgents := append([]string{}, supportedAgents...)
-	sort.Strings(displayAgents)
-	fmt.Println("\nSelect the source agent:")
-	for i, agent := range displayAgents {
-		fmt.Printf("  %d) %s\n", i+1, agent)
-	}
-	for {
-		fmt.Printf("Enter choice [1-%d]: ", len(displayAgents))
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		choice, convErr := strconv.Atoi(strings.TrimSpace(input))
-		if convErr != nil || choice < 1 || choice > len(displayAgents) {
-			fmt.Println("Please enter a number from the list above.")
-			continue
-		}
-		return displayAgents[choice-1], nil
-	}
-}
-
-func promptTargetAgents(reader *bufio.Reader, source string) ([]string, error) {
-	options := make([]string, 0, len(supportedAgents)-1)
-	for _, agent := range supportedAgents {
-		if agent == source {
-			continue
-		}
-		options = append(options, agent)
-	}
-	if len(options) == 0 {
-		return nil, fmt.Errorf("no target agents available for source %q", source)
-	}
+func promptTargetAgents(reader *bufio.Reader) ([]config.AgentTarget, error) {
+	options := append([]string{}, supportedAgents...)
 
 	sort.Strings(options)
 	fmt.Println("\nSelect target agents (enter comma-separated numbers, e.g. 1,3):")
@@ -460,7 +460,7 @@ func promptTargetAgents(reader *bufio.Reader, source string) ([]string, error) {
 			continue
 		}
 		seen := make(map[int]struct{}, len(selections))
-		var targets []string
+		var targets []config.AgentTarget
 		valid := true
 		for _, idx := range selections {
 			if idx < 1 || idx > len(options) {
@@ -472,7 +472,7 @@ func promptTargetAgents(reader *bufio.Reader, source string) ([]string, error) {
 				continue
 			}
 			seen[idx] = struct{}{}
-			targets = append(targets, options[idx-1])
+			targets = append(targets, config.AgentTarget{Name: options[idx-1]})
 		}
 		if !valid {
 			continue
@@ -622,17 +622,4 @@ func validateCommand(args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown command %q. Use -h for usage or run \"init\" to create a config.", arg)
-}
-
-func resolveExecutionMode(sourceFlag, agentsFlag string, configFlagUsed bool) (bool, error) {
-	sourceProvided := strings.TrimSpace(sourceFlag) != ""
-	agentsProvided := strings.TrimSpace(agentsFlag) != ""
-
-	if configFlagUsed && (sourceProvided || agentsProvided) {
-		return true, fmt.Errorf("-config cannot be combined with -source or -agents")
-	}
-	if sourceProvided != agentsProvided {
-		return true, fmt.Errorf("use -source and -agents together or rely entirely on the config file")
-	}
-	return !sourceProvided, nil
 }
