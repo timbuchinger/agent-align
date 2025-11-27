@@ -214,7 +214,7 @@ func parseServersFromTOML(payload string) (map[string]interface{}, error) {
 			continue
 		}
 
-		// Check for server section header [mcp_servers.servername]
+		// Check for server section header [mcp_servers.servername] or [mcp_servers.servername.subsection]
 		if strings.HasPrefix(line, "[mcp_servers.") && strings.HasSuffix(line, "]") {
 			if currentServer != "" && serverData != nil {
 				servers[currentServer] = serverData
@@ -251,7 +251,100 @@ func parseServersFromTOML(payload string) (map[string]interface{}, error) {
 		servers[currentServer] = serverData
 	}
 
+	// Merge nested sections (e.g., "github.env" becomes nested under "github" as "env")
+	servers = mergeNestedTOMLSections(servers)
+
 	return servers, nil
+}
+
+// mergeNestedTOMLSections converts flat dotted section names into nested structures.
+// For example, "github.env" with data {KEY: "value"} gets merged into
+// "github" as {env: {KEY: "value"}}.
+func mergeNestedTOMLSections(servers map[string]interface{}) map[string]interface{} {
+	// Collect all keys that contain dots (subsections)
+	var subsectionNames []string
+	for name := range servers {
+		if strings.Contains(name, ".") {
+			subsectionNames = append(subsectionNames, name)
+		}
+	}
+
+	// If no subsections, return as-is
+	if len(subsectionNames) == 0 {
+		return servers
+	}
+
+	// Sort subsection names for deterministic processing order
+	sort.Strings(subsectionNames)
+
+	// Process subsections and merge them into parent servers
+	for _, subsectionName := range subsectionNames {
+		parts := strings.SplitN(subsectionName, ".", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		parentName := parts[0]
+		childKey := parts[1]
+		subsectionData := servers[subsectionName]
+
+		// Ensure parent exists
+		parent, parentExists := servers[parentName]
+		if !parentExists {
+			parent = make(map[string]interface{})
+			servers[parentName] = parent
+		}
+
+		// Convert parent to map if needed (this handles edge case where parent
+		// was defined but is not a map - in TOML context this shouldn't happen
+		// for well-formed configs, but we handle it gracefully)
+		parentMap, ok := parent.(map[string]interface{})
+		if !ok {
+			parentMap = make(map[string]interface{})
+			servers[parentName] = parentMap
+		}
+
+		// Handle nested subsections (e.g., "github.env.nested" -> github.env.nested)
+		if strings.Contains(childKey, ".") {
+			// Recursively build the nested structure
+			setNestedValue(parentMap, childKey, subsectionData)
+		} else {
+			// Simple case: set the child key directly
+			parentMap[childKey] = subsectionData
+		}
+
+		// Remove the flat subsection key
+		delete(servers, subsectionName)
+	}
+
+	return servers
+}
+
+// setNestedValue sets a value at a nested path within a map.
+// For example, setNestedValue(m, "env.nested", data) creates m["env"]["nested"] = data
+func setNestedValue(m map[string]interface{}, path string, value interface{}) {
+	parts := strings.SplitN(path, ".", 2)
+	if len(parts) == 1 {
+		m[parts[0]] = value
+		return
+	}
+
+	// Ensure intermediate map exists
+	child, exists := m[parts[0]]
+	if !exists {
+		child = make(map[string]interface{})
+		m[parts[0]] = child
+	}
+
+	// If existing value is not a map, replace it (this handles edge cases
+	// where a simple value exists at an intermediate path level)
+	childMap, ok := child.(map[string]interface{})
+	if !ok {
+		childMap = make(map[string]interface{})
+		m[parts[0]] = childMap
+	}
+
+	setNestedValue(childMap, parts[1], value)
 }
 
 // parseTOMLArray parses a simple TOML array like ["a", "b", "c"]
@@ -324,42 +417,72 @@ func formatToTOML(servers map[string]interface{}) string {
 			continue
 		}
 
-		sb.WriteString(fmt.Sprintf("[mcp_servers.%s]\n", name))
-
-		// Sort keys for consistent output
-		keys := make([]string, 0, len(serverData))
-		for k := range serverData {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-
-		for _, k := range keys {
-			v := serverData[k]
-			switch val := v.(type) {
-			case string:
-				sb.WriteString(fmt.Sprintf("%s = \"%s\"\n", k, val))
-			case []interface{}:
-				arr := make([]string, 0, len(val))
-				for _, item := range val {
-					if s, ok := item.(string); ok {
-						arr = append(arr, fmt.Sprintf("\"%s\"", s))
-					}
-				}
-				sb.WriteString(fmt.Sprintf("%s = [%s]\n", k, strings.Join(arr, ", ")))
-			case []string:
-				arr := make([]string, 0, len(val))
-				for _, s := range val {
-					arr = append(arr, fmt.Sprintf("\"%s\"", s))
-				}
-				sb.WriteString(fmt.Sprintf("%s = [%s]\n", k, strings.Join(arr, ", ")))
-			default:
-				sb.WriteString(fmt.Sprintf("%s = %v\n", k, val))
-			}
-		}
-		sb.WriteString("\n")
+		formatServerToTOML(&sb, "mcp_servers."+name, serverData)
 	}
 
 	return strings.TrimRight(sb.String(), "\n")
+}
+
+// formatServerToTOML recursively formats a server and its nested sections to TOML
+func formatServerToTOML(sb *strings.Builder, sectionPath string, data map[string]interface{}) {
+	// Separate nested maps from simple values
+	simpleValues := make(map[string]interface{})
+	nestedMaps := make(map[string]map[string]interface{})
+
+	for k, v := range data {
+		if nested, ok := v.(map[string]interface{}); ok {
+			nestedMaps[k] = nested
+		} else {
+			simpleValues[k] = v
+		}
+	}
+
+	// Write the section header and simple values
+	sb.WriteString(fmt.Sprintf("[%s]\n", sectionPath))
+
+	// Sort keys for consistent output
+	keys := make([]string, 0, len(simpleValues))
+	for k := range simpleValues {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		v := simpleValues[k]
+		switch val := v.(type) {
+		case string:
+			sb.WriteString(fmt.Sprintf("%s = \"%s\"\n", k, val))
+		case []interface{}:
+			arr := make([]string, 0, len(val))
+			for _, item := range val {
+				if s, ok := item.(string); ok {
+					arr = append(arr, fmt.Sprintf("\"%s\"", s))
+				}
+			}
+			sb.WriteString(fmt.Sprintf("%s = [%s]\n", k, strings.Join(arr, ", ")))
+		case []string:
+			arr := make([]string, 0, len(val))
+			for _, s := range val {
+				arr = append(arr, fmt.Sprintf("\"%s\"", s))
+			}
+			sb.WriteString(fmt.Sprintf("%s = [%s]\n", k, strings.Join(arr, ", ")))
+		default:
+			sb.WriteString(fmt.Sprintf("%s = %v\n", k, val))
+		}
+	}
+	sb.WriteString("\n")
+
+	// Sort nested map keys for consistent output
+	nestedKeys := make([]string, 0, len(nestedMaps))
+	for k := range nestedMaps {
+		nestedKeys = append(nestedKeys, k)
+	}
+	sort.Strings(nestedKeys)
+
+	// Recursively format nested maps as separate sections
+	for _, k := range nestedKeys {
+		formatServerToTOML(sb, sectionPath+"."+k, nestedMaps[k])
+	}
 }
 
 func formatCodexConfig(cfg AgentConfig, servers map[string]interface{}) string {

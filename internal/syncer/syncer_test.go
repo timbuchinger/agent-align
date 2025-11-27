@@ -557,3 +557,214 @@ func TestSyncer_CopilotTransformDoesNotAffectOtherAgents(t *testing.T) {
 		t.Error("claudecode should NOT have tools array")
 	}
 }
+
+func TestParseServersFromTOML_NestedSections(t *testing.T) {
+	// Test that nested TOML sections like [mcp_servers.github.env] are properly merged
+	payload := `[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+
+[mcp_servers.github.env]
+GITHUB_PERSONAL_ACCESS_TOKEN = "abc123"
+OTHER_VAR = "value"
+`
+
+	servers, err := parseServersFromTOML(payload)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have only one server: "github"
+	if len(servers) != 1 {
+		t.Fatalf("expected 1 server, got %d: %v", len(servers), servers)
+	}
+
+	github, ok := servers["github"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected github server to be a map, got %T", servers["github"])
+	}
+
+	// Check basic properties
+	if github["command"] != "npx" {
+		t.Errorf("expected command 'npx', got %v", github["command"])
+	}
+
+	// Check that env is nested properly
+	env, ok := github["env"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected env to be a nested map, got %T", github["env"])
+	}
+
+	if env["GITHUB_PERSONAL_ACCESS_TOKEN"] != "abc123" {
+		t.Errorf("expected GITHUB_PERSONAL_ACCESS_TOKEN 'abc123', got %v", env["GITHUB_PERSONAL_ACCESS_TOKEN"])
+	}
+	if env["OTHER_VAR"] != "value" {
+		t.Errorf("expected OTHER_VAR 'value', got %v", env["OTHER_VAR"])
+	}
+}
+
+func TestParseServersFromTOML_MultipleServersWithNested(t *testing.T) {
+	// Test multiple servers, some with nested sections
+	payload := `[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+
+[mcp_servers.github.env]
+GITHUB_TOKEN = "token123"
+
+[mcp_servers.simple]
+command = "node"
+args = ["server.js"]
+`
+
+	servers, err := parseServersFromTOML(payload)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have two servers: "github" and "simple"
+	if len(servers) != 2 {
+		t.Fatalf("expected 2 servers, got %d: %v", len(servers), servers)
+	}
+
+	// Check github server has nested env
+	github, ok := servers["github"].(map[string]interface{})
+	if !ok {
+		t.Fatal("github server not found or wrong type")
+	}
+	env, ok := github["env"].(map[string]interface{})
+	if !ok {
+		t.Fatal("github.env not found or wrong type")
+	}
+	if env["GITHUB_TOKEN"] != "token123" {
+		t.Errorf("expected GITHUB_TOKEN 'token123', got %v", env["GITHUB_TOKEN"])
+	}
+
+	// Check simple server has no env
+	simple, ok := servers["simple"].(map[string]interface{})
+	if !ok {
+		t.Fatal("simple server not found or wrong type")
+	}
+	if _, hasEnv := simple["env"]; hasEnv {
+		t.Error("simple server should not have env")
+	}
+}
+
+func TestFormatToTOML_NestedSections(t *testing.T) {
+	// Test that nested structures are formatted as separate TOML sections
+	servers := map[string]interface{}{
+		"github": map[string]interface{}{
+			"command": "npx",
+			"args":    []interface{}{"-y", "@modelcontextprotocol/server-github"},
+			"env": map[string]interface{}{
+				"GITHUB_TOKEN": "token123",
+			},
+		},
+	}
+
+	result := formatToTOML(servers)
+
+	// Should contain main section
+	if !strings.Contains(result, "[mcp_servers.github]") {
+		t.Errorf("should contain [mcp_servers.github], got: %s", result)
+	}
+
+	// Should contain nested env section
+	if !strings.Contains(result, "[mcp_servers.github.env]") {
+		t.Errorf("should contain [mcp_servers.github.env], got: %s", result)
+	}
+
+	// Should contain the token in env section
+	if !strings.Contains(result, `GITHUB_TOKEN = "token123"`) {
+		t.Errorf("should contain GITHUB_TOKEN, got: %s", result)
+	}
+}
+
+func TestTOMLRoundTrip_NestedSections(t *testing.T) {
+	// Test that parsing TOML with nested sections and converting back produces equivalent output
+	original := `[mcp_servers.github]
+args = ["-y", "@modelcontextprotocol/server-github"]
+command = "npx"
+
+[mcp_servers.github.env]
+GITHUB_TOKEN = "abc123"
+`
+
+	servers, err := parseServersFromTOML(original)
+	if err != nil {
+		t.Fatalf("unexpected error parsing TOML: %v", err)
+	}
+
+	// Convert back to TOML
+	result := formatToTOML(servers)
+
+	// Re-parse and verify structure
+	servers2, err := parseServersFromTOML(result)
+	if err != nil {
+		t.Fatalf("unexpected error re-parsing TOML: %v", err)
+	}
+
+	github, ok := servers2["github"].(map[string]interface{})
+	if !ok {
+		t.Fatal("github server not found after round-trip")
+	}
+
+	env, ok := github["env"].(map[string]interface{})
+	if !ok {
+		t.Fatal("github.env not found after round-trip")
+	}
+
+	if env["GITHUB_TOKEN"] != "abc123" {
+		t.Errorf("expected GITHUB_TOKEN 'abc123' after round-trip, got %v", env["GITHUB_TOKEN"])
+	}
+}
+
+func TestSyncer_CodexSourceWithNestedEnv(t *testing.T) {
+	// Test end-to-end sync from Codex source with nested env to JSON targets
+	payload := `[mcp_servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+
+[mcp_servers.github.env]
+GITHUB_TOKEN = "test_token"
+`
+
+	s := New("codex", []string{"copilot", "vscode"})
+	template := Template{Name: "test-config", Payload: payload}
+
+	result, err := s.Sync(template)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Parse copilot output and verify structure
+	var copilotData map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Agents["copilot"]), &copilotData); err != nil {
+		t.Fatalf("copilot output is not valid JSON: %v", err)
+	}
+
+	mcpServers, ok := copilotData["mcpServers"].(map[string]interface{})
+	if !ok {
+		t.Fatal("copilot output missing mcpServers")
+	}
+
+	github, ok := mcpServers["github"].(map[string]interface{})
+	if !ok {
+		t.Fatal("copilot output missing github server")
+	}
+
+	// Verify env is properly nested
+	env, ok := github["env"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("github.env should be a nested object, got %T", github["env"])
+	}
+
+	if env["GITHUB_TOKEN"] != "test_token" {
+		t.Errorf("expected GITHUB_TOKEN 'test_token', got %v", env["GITHUB_TOKEN"])
+	}
+
+	// Verify there's no separate "github.env" server
+	if _, exists := mcpServers["github.env"]; exists {
+		t.Error("should not have separate 'github.env' server - it should be nested under 'github'")
+	}
+}
