@@ -22,9 +22,14 @@ VS Code | JSON | `servers` | `~/.config/Code/User/mcp.json`
 Codex | TOML | `mcp_servers` | `~/.codex/config.toml`
 ClaudeCode | JSON | `mcpServers` | `~/.claude.json`
 Gemini | JSON | `mcpServers` | `~/.gemini/settings.json`
-Kilocode | JSON | `mcpServers` | `~/AppData/Roaming/Code/user/mcp.json` (Windows) or `~/.config/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` (Linux)
+Kilocode | JSON | `mcpServers` | Platform-dependent (see note below)
 
 ## Core Types
+
+Note: Kilocode config paths
+
+- Windows: `~/AppData/Roaming/Code/user/mcp.json`
+- Linux: `~/.config/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json`
 
 - `AgentConfig` – holds the agent name, format, root node, and destination path
   (with optional overrides applied).

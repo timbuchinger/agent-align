@@ -165,9 +165,14 @@ vscode | `~/.config/Code/User/mcp.json` | JSON | `servers`
 codex | `~/.codex/config.toml` | TOML | `mcp_servers`
 claudecode | `~/.claude.json` | JSON | `mcpServers`
 gemini | `~/.gemini/settings.json` | JSON | `mcpServers`
-kilocode | `~/AppData/Roaming/Code/user/mcp.json` (Windows) or `~/.config/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` (Linux) | JSON | `mcpServers`
+kilocode | Platform-dependent (see note below) | JSON | `mcpServers`
 
 ## Testing
+
+Note: Kilocode config paths
+
+- Windows: `~/AppData/Roaming/Code/user/mcp.json`
+- Linux: `~/.config/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json`
 
 Run:
 
