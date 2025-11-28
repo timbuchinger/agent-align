@@ -6,7 +6,7 @@ repo_url: https://github.com/timbuchinger/agent-align
 nav:
   - Home: index.md
   - Configuration: configuration.md
-  - Formatter Design: FORMATTER_DESIGN.md
+  # Internal design docs moved to internal/docs/ and are not part of the public site
 theme:
   name: material
   logo: icon-resized.png
