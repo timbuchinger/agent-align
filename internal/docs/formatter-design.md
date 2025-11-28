@@ -1,4 +1,3 @@
-````markdown
 # Formatter Design
 
 This document outlines how agent-align parses, transforms, and outputs MCP
@@ -61,5 +60,3 @@ internal/
 ├── syncer/       # Sync logic plus parsing/formatting helpers
 └── transforms/   # Agent-specific mutation rules
 ```
-
-````

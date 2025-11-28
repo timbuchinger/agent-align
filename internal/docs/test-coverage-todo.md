@@ -1,4 +1,3 @@
-```markdown
 # Test Coverage TODO
 
 ## Current state
@@ -22,5 +21,3 @@
 
 Completing these steps should push `cmd/agent-align` coverage well above the
 current 23% while leaving the already strong `internal/*` packages untouched.
-
-```
