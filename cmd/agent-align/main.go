@@ -23,14 +23,9 @@ import (
 	"agent-align/internal/syncer"
 )
 
-const (
-	defaultAgents = "copilot,vscode,codex,claudecode,gemini,kilocode"
-)
-
 var (
-	promptUser      = askYes
-	collectConfig   = promptForConfig
-	supportedAgents = []string{"codex", "vscode", "gemini", "copilot", "claudecode", "kilocode"}
+	promptUser    = askYes
+	collectConfig = promptForConfig
 )
 
 //go:embed config.example.yml
@@ -47,6 +42,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	defaultAgents := strings.Join(syncer.SupportedAgents(), ",")
 	agents := flag.String("agents", "", fmt.Sprintf("comma-separated list of agents to keep in sync (defaults to %s)", defaultAgents))
 	configPath := flag.String("config", defaultConfigPath(), "path to YAML configuration file describing target agents and overrides")
 	mcpConfigPath := flag.String("mcp-config", "", "path to YAML file that defines MCP servers (defaults to agent-align-mcp.yml next to the target config)")
@@ -232,10 +228,13 @@ func main() {
 
 	// Apply the changes
 	fmt.Println("\nApplying changes...")
+	var applyErrors []string
 	for _, agent := range agentNames {
 		output := syncResult.Agents[agent]
 		if err := writeAgentConfig(output.Config.FilePath, output.Content); err != nil {
-			log.Printf("Error writing config for %s: %v", agent, err)
+			msg := fmt.Sprintf("error writing config for %s: %v", agent, err)
+			log.Print(msg)
+			applyErrors = append(applyErrors, msg)
 			continue
 		}
 		fmt.Printf("  Updated: %s\n", output.Config.FilePath)
@@ -244,11 +243,15 @@ func main() {
 	for _, target := range additionalTargets {
 		content, err := buildAdditionalJSONContent(target, syncResult.Servers)
 		if err != nil {
-			log.Printf("Error preparing additional JSON %s: %v", target.FilePath, err)
+			msg := fmt.Sprintf("error preparing additional JSON %s: %v", target.FilePath, err)
+			log.Print(msg)
+			applyErrors = append(applyErrors, msg)
 			continue
 		}
 		if err := writeAgentConfig(target.FilePath, content); err != nil {
-			log.Printf("Error writing additional JSON %s: %v", target.FilePath, err)
+			msg := fmt.Sprintf("error writing additional JSON %s: %v", target.FilePath, err)
+			log.Print(msg)
+			applyErrors = append(applyErrors, msg)
 			continue
 		}
 		fmt.Printf("  Updated additional JSON: %s\n", target.FilePath)
@@ -259,7 +262,9 @@ func main() {
 
 	for _, target := range extraTargets.Files {
 		if err := copyExtraFileTarget(target); err != nil {
-			log.Printf("Error copying extra file %s: %v", target.Source, err)
+			msg := fmt.Sprintf("error copying extra file %s: %v", target.Source, err)
+			log.Print(msg)
+			applyErrors = append(applyErrors, msg)
 			continue
 		}
 		fmt.Printf("  Copied extra file: %s -> %d destinations\n", target.Source, len(target.Destinations))
@@ -267,7 +272,9 @@ func main() {
 	for _, target := range extraTargets.Directories {
 		count, err := copyExtraDirectoryTarget(target)
 		if err != nil {
-			log.Printf("Error copying extra directory %s: %v", target.Source, err)
+			msg := fmt.Sprintf("error copying extra directory %s: %v", target.Source, err)
+			log.Print(msg)
+			applyErrors = append(applyErrors, msg)
 			continue
 		}
 		fmt.Printf("  Copied extra directory: %s -> %d destination(s) (%d files)\n", target.Source, len(target.Destinations), count)
@@ -283,6 +290,13 @@ func main() {
 		}
 	}
 	fmt.Println("\nConfiguration sync complete.")
+	if len(applyErrors) > 0 {
+		fmt.Println("Encountered errors while applying changes:")
+		for _, msg := range applyErrors {
+			fmt.Printf("  - %s\n", msg)
+		}
+		os.Exit(1)
+	}
 }
 
 func parseAgents(agents string) []string {
@@ -440,7 +454,7 @@ func configPromptSuffix(path string) string {
 }
 
 func promptTargetAgents(reader *bufio.Reader) ([]config.AgentTarget, error) {
-	options := append([]string{}, supportedAgents...)
+	options := syncer.SupportedAgents()
 
 	sort.Strings(options)
 	fmt.Println("\nSelect target agents (enter comma-separated numbers, e.g. 1,3):")

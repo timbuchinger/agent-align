@@ -1,0 +1,23 @@
+# Example MCP server definitions for agent-align-mcp.yml
+servers:
+  github:
+    type: streamable-http
+    url: https://api.example.com/mcp/
+    headers:
+      Authorization: "Bearer REPLACE_WITH_GITHUB_TOKEN"
+    autoApprove: true
+    tools: []
+  claude-cli:
+    command: npx
+    args:
+      - '@example/mcp-server@latest'
+    env:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    alwaysAllow:
+      - search
+  local-prompts:
+    command: ./scripts/run-prompts.sh
+    args:
+      - --watch
+    env:
+      PROMPT_DIR: ./prompts

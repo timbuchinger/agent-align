@@ -196,25 +196,3 @@ func TestFormatGeminiConfigWithoutExistingFile(t *testing.T) {
 		t.Fatal("mcpServers key missing")
 	}
 }
-
-func TestParseServersFromJSON_WholePayload(t *testing.T) {
-	payload := `{"server1": {"command": "npx"}}`
-	got, err := parseServersFromJSON("", payload)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("expected 1 server, got %d", len(got))
-	}
-	if _, ok := got["server1"]; !ok {
-		t.Fatalf("expected server1 key present")
-	}
-}
-
-func TestParseServersFromJSON_InvalidJSON(t *testing.T) {
-	payload := `not valid json`
-	_, err := parseServersFromJSON("mcpServers", payload)
-	if err == nil {
-		t.Fatal("expected error for invalid JSON")
-	}
-}

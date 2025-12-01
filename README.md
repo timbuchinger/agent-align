@@ -4,8 +4,8 @@
 
 agent-align is a Go-based utility that keeps MCP configuration files aligned
 across coding agents such as Copilot, VSCode, Codex, Claude Code, Gemini, and
-others. Define your MCP servers once in a neutral YAML file and agent-align will
-convert that configuration into the formats required by each tool while
+others. Define your MCP servers once in `agent-align-mcp.yml` and agent-align
+converts that configuration into the formats required by each tool while
 applying agent-specific tweaks automatically. Detailed documentation is hosted
 on GitHub Pages at <https://timbuchinger.github.io/agent-align/>.
 
@@ -20,9 +20,11 @@ on GitHub Pages at <https://timbuchinger.github.io/agent-align/>.
 
 ## Getting started
 
-1. Download the latest binary from the [releases page](https://github.com/timbuchinger/agent-align/releases/latest).
-2. Create an MCP definitions file; for example, save this to
-   `agent-align-mcp.yml` next to the binary:
+1. Download the latest binary from the
+   [releases page](https://github.com/timbuchinger/agent-align/releases/latest)
+   (or run `go build ./cmd/agent-align`).
+2. Create an MCP definitions file to act as the source of truth; for example,
+   save this to `agent-align-mcp.yml` next to the binary:
 
    ```yaml
    servers:
@@ -32,6 +34,9 @@ on GitHub Pages at <https://timbuchinger.github.io/agent-align/>.
        headers:
          Authorization: "Bearer REPLACE_WITH_GITHUB_TOKEN"
    ```
+
+   See `config-mcp.example.yml` for a more complete template with command-based
+   servers and environment variables.
 
 3. Create a target config; for example, save this to `agent-align.yml`:
 
@@ -46,6 +51,9 @@ on GitHub Pages at <https://timbuchinger.github.io/agent-align/>.
          - claudecode
          - gemini
    ```
+
+   You can also run `agent-align init -config /path/to/agent-align.yml` to walk
+   through the same settings interactively.
 
 4. Run the app with your config files:
 
@@ -135,31 +143,37 @@ site.
 
 ## Configuration file
 
-`agent-align` looks for a YAML configuration at one of the platform-specific locations:
+`agent-align` relies on two YAML files:
 
-- Linux: `/etc/agent-align.yml`
-- macOS: `/usr/local/etc/agent-align.yml`
-- Windows: `C:\ProgramData\agent-align\config.yml`
+1. **MCP definitions (`agent-align-mcp.yml`)** – lists the complete server map
+   using the neutral structure shown in the getting started section (see
+   `config-mcp.example.yml`).
+2. **Target config (`agent-align.yml`)** – describes where to load the MCP
+   definitions and which agents/extra files should be updated (see
+   `config.example.yml`).
 
-You can override this path with `-config <path>`. The file should contain an
-`mcpServers` block with an optional `configPath` (defaults to
-`agent-align-mcp.yml` next to the config) and a `targets` block that lists the
-agents to update. Each agent entry can optionally set `path` to override the
-default location for that tool. Add entries under `targets.additionalTargets.json`
-to mirror the MCP payload into other JSON files (each entry specifies `filePath`
-and the `jsonPath` where the servers belong). See `CONFIGURATION.md` for the
-schema and examples. The MCP servers themselves live in a separate YAML file,
-and the CLI applies agent-specific transformations when writing each target.
+The target config is searched at platform-specific paths (`/etc/agent-align.yml`
+on Linux, `/usr/local/etc/agent-align.yml` on macOS, and
+`C:\ProgramData\agent-align\config.yml` on Windows). Override the path with
+`-config <path>`. Within that file, set `mcpServers.configPath` to point to the
+MCP definitions (defaults to `agent-align-mcp.yml` next to the config) and list
+the agents under `mcpServers.targets.agents`. Each entry can be either a
+string (agent name) or a mapping with a `name` plus optional destination `path`.
+Add entries under `targets.additionalTargets.json` to mirror the MCP payload
+into other JSON files (each entry specifies `filePath` and the `jsonPath` where
+the servers belong). See `CONFIGURATION.md` for the full schema and additional
+examples.
 
-An optional top-level `extraTargets` block copies files or directories alongside
-the MCP sync. Use `extraTargets.files` to mirror a single file into multiple
-destinations (for example, `AGENTS.md` into multiple worktrees). Use
+Add the optional top-level `extraTargets` block to copy files or directories
+alongside the MCP sync. Use `extraTargets.files` to mirror a single file into
+multiple destinations (for example, `AGENTS.md` into multiple worktrees). Use
 `extraTargets.directories` to copy a folder to one or more other locations
 (`destinations` is a list of objects with `path` and optional `flatten`) so you
 can decide which destinations keep their directory structure.
 
-The tool will display the converted configurations for each agent and prompt
-for confirmation before writing the changes (unless `-confirm` is specified).
+Every run prints the generated configurations and extra copy destinations so
+you can review the plan. Pass `-dry-run` to exit after the preview or `-confirm`
+to skip the interactive prompt when applying the changes.
 
 ## Supported Agents
 
@@ -182,10 +196,11 @@ Note: Kilocode config paths
 Run:
 
 ```bash
-go test ./...
+GOCACHE=/tmp/agent-align-go-cache go test -coverprofile=coverage.out ./...
 ```
 
-The unit tests cover template loading and the syncer's validation/conversion logic.
+The unit tests cover template loading and the syncer's validation/conversion
+logic.
 
 ## CI and releases
 

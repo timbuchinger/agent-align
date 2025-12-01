@@ -2,14 +2,16 @@
 
 This repository powers **agent-align**, a Go utility for synchronizing MCP (model
 configuration profile) configs across coding agents such as Copilot, Codex, Claude
-Code, Gemini, and others. It keeps every agent's configuration in lockstep so you
-can iterate on a single template and automatically propagate changes to the rest
-of the toolchain.
+Code, Gemini, Kilocode, VS Code, and others. It keeps every agent's configuration
+in lockstep so you can iterate on a single MCP template and automatically
+propagate changes to the rest of the toolchain.
 
-You provide one file as the template, and agent-align converts it into the
-formats required by the other agents. One of the agent-specific outputs is chosen
-as the source of truth, and the tool uses that to update the remaining files so
-all the agents stay in sync.
+You define the servers once in `agent-align-mcp.yml` (or another MCP YAML path)
+and describe the destinations plus extra copy rules in `agent-align.yml`. The CLI
+reads those two files, renders the agent-specific formats (including JSON/TOML
+transforms), and optionally mirrors the payload into additional JSON or file/directory
+targets. Each run prints the planned changes for review before anything is
+written unless `-confirm` is supplied.
 
 All commits must follow Conventional Commits so the release workflow can determine
 the next semantic version automatically.

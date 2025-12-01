@@ -18,9 +18,17 @@ servers:
     url: https://api.example.com/mcp/
     headers:
       Authorization: "Bearer REPLACE_WITH_GITHUB_TOKEN"
-  github-cli:
+    tools: []
+  claude-cli:
     command: npx
-    args: ["@example/mcp-server@latest"]
+    args:
+      - '@example/mcp-server@latest'
+    env:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+  prompts:
+    command: ./scripts/run-prompts.sh
+    args:
+      - --watch
 ```
 
 You can also use the legacy `mcpServers` key instead of `servers`. Each server
@@ -42,19 +50,22 @@ mcpServers:
       - name: vscode
       - name: codex
         path: /custom/.codex/config.toml  # optional override
+      - claudecode
+      - gemini
+      - kilocode
     additionalTargets:
       json:
-        - filePath: path/to/additional_targets.json
+        - filePath: /path/to/additional_targets.json
           jsonPath: .mcpServers
 extraTargets:
   files:
-    - source: path/to/AGENTS.md
+    - source: /path/to/AGENTS.md
       destinations:
-        - path/to/other/AGENTS.md
+        - /path/to/other/AGENTS.md
   directories:
-    - source: path/to/prompts
+    - source: /path/to/prompts
       destinations:
-        - path: path/to/another/prompts
+        - path: /path/to/another/prompts
           flatten: true
 ```
 
@@ -65,7 +76,8 @@ extraTargets:
     to `agent-align-mcp.yml` next to the target config when omitted.
   - `targets` (mapping, required) – agents to write plus optional extras.
     - `agents` (sequence, required) – list of agent names or objects with `name`
-      and optional `path` override for the destination file.
+      and optional `path` override for the destination file. Duplicates and
+      blank entries are ignored.
     - `additionalTargets.json` (sequence, optional) – mirror the MCP payload
       into other JSON files. Each entry must specify `filePath` and may set
       `jsonPath` (dot-separated) where the servers should be placed; omit
@@ -96,3 +108,18 @@ Note: Kilocode config paths
 
 - Windows: `~/AppData/Roaming/Code/user/mcp.json`
 - Linux: `~/.config/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json`
+
+## CLI flags and init command
+
+- `-config` – Path to the target config. Defaults to the platform-specific
+  location listed above.
+- `-mcp-config` – Path to the MCP definitions file. Defaults to
+  `agent-align-mcp.yml` next to the selected config.
+- `-agents` – Override the target agents defined in the config. Overrides still
+  honor per-agent `path` entries if they exist in the file.
+- `-dry-run` – Preview changes without writing.
+- `-confirm` – Skip the confirmation prompt when applying writes.
+
+Run `agent-align init -config ./agent-align.yml` to generate a starter config via
+prompts if you prefer not to edit YAML manually. The wizard collects the agent
+list plus optional additional JSON destinations and writes the final file for you.

@@ -1,3 +1,4 @@
+# Embedded CLI example config (keep in sync with /config.example.yml)
 mcpServers:
   configPath: agent-align-mcp.yml
   targets:
@@ -6,22 +7,22 @@ mcpServers:
       - name: vscode
       - name: codex
         path: /custom/.codex/config.toml
-      - name: claudecode
-      - name: gemini
-      - name: kilocode
+      - claudecode
+      - gemini
+      - kilocode
     additionalTargets:
       json:
-        - filePath: path/to/additional_targets.json
+        - filePath: /path/to/additional_targets.json
           jsonPath: .mcpServers
 extraTargets:
   files:
-    - source: path/to/AGENTS.md
+    - source: /path/to/AGENTS.md
       destinations:
-        - path/to/other/AGENTS.md
-        - path/to/another/AGENTS.md
+        - /path/to/other/AGENTS.md
+        - /path/to/another/AGENTS.md
   directories:
-    - source: path/to/prompts
+    - source: /path/to/prompts
       destinations:
-        - path: path/to/other/prompts
+        - path: /path/to/other/prompts
           flatten: true
-        - path: path/to/another/prompts
+        - path: /path/to/another/prompts

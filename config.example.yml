@@ -1,24 +1,28 @@
+# Example target config for agent-align.yml (keep in sync with cmd/agent-align/config.example.yml)
 mcpServers:
-  sourceAgent: codex
+  configPath: agent-align-mcp.yml
   targets:
     agents:
-      - gemini
-      - copilot
-      - vscode
+      - name: copilot
+      - name: vscode
+      - name: codex
+        path: /custom/.codex/config.toml
       - claudecode
+      - gemini
+      - kilocode
     additionalTargets:
       json:
-        - filePath: path/to/additional_targets.json
+        - filePath: /path/to/additional_targets.json
           jsonPath: .mcpServers
 extraTargets:
   files:
-    - source: path/to/AGENTS.md
+    - source: /path/to/AGENTS.md
       destinations:
-        - path/to/other/AGENTS.md
-        - path/to/another/AGENTS.md
+        - /path/to/other/AGENTS.md
+        - /path/to/another/AGENTS.md
   directories:
-    - source: path/to/prompts
+    - source: /path/to/prompts
       destinations:
-        - path: path/to/other/prompts
+        - path: /path/to/other/prompts
           flatten: true
-        - path: path/to/another/prompts
+        - path: /path/to/another/prompts
