@@ -158,17 +158,19 @@ func main() {
 	sort.Strings(agentNames)
 
 	for _, agent := range agentNames {
-		output := syncResult.Agents[agent]
-		fmt.Printf("Agent: %s\n", agent)
-		fmt.Printf("  File: %s\n", output.Config.FilePath)
-		fmt.Printf("  Format: %s\n", output.Config.Format)
-		fmt.Printf("  Content:\n")
-		// Indent the content for readability
-		lines := strings.Split(output.Content, "\n")
-		for _, line := range lines {
-			fmt.Printf("    %s\n", line)
+		outputs := syncResult.Agents[agent]
+		for _, output := range outputs {
+			fmt.Printf("Agent: %s\n", agent)
+			fmt.Printf("  File: %s\n", output.Config.FilePath)
+			fmt.Printf("  Format: %s\n", output.Config.Format)
+			fmt.Printf("  Content:\n")
+			// Indent the content for readability
+			lines := strings.Split(output.Content, "\n")
+			for _, line := range lines {
+				fmt.Printf("    %s\n", line)
+			}
+			fmt.Println()
 		}
-		fmt.Println()
 	}
 
 	if len(additionalTargets) > 0 {
@@ -237,14 +239,16 @@ func main() {
 	fmt.Println("\nApplying changes...")
 	var applyErrors []string
 	for _, agent := range agentNames {
-		output := syncResult.Agents[agent]
-		if err := writeAgentConfig(output.Config.FilePath, output.Content); err != nil {
-			msg := fmt.Sprintf("error writing config for %s: %v", agent, err)
-			log.Print(msg)
-			applyErrors = append(applyErrors, msg)
-			continue
+		outputs := syncResult.Agents[agent]
+		for _, output := range outputs {
+			if err := writeAgentConfig(output.Config.FilePath, output.Content); err != nil {
+				msg := fmt.Sprintf("error writing config for %s: %v", agent, err)
+				log.Print(msg)
+				applyErrors = append(applyErrors, msg)
+				continue
+			}
+			fmt.Printf("  Updated: %s\n", output.Config.FilePath)
 		}
-		fmt.Printf("  Updated: %s\n", output.Config.FilePath)
 	}
 
 	for _, target := range additionalTargets {

@@ -31,11 +31,17 @@ func TestSyncerSync(t *testing.T) {
 		t.Fatalf("Sync returned error: %v", err)
 	}
 
-	if len(result.Agents) != len(targets) {
-		t.Fatalf("expected %d agents, got %d", len(targets), len(result.Agents))
+	// Ensure we produced one output per requested target (allows multiple
+	// destinations for the same agent name).
+	total := 0
+	for _, arr := range result.Agents {
+		total += len(arr)
+	}
+	if total != len(targets) {
+		t.Fatalf("expected %d agent outputs, got %d", len(targets), total)
 	}
 
-	copilot := result.Agents["copilot"]
+	copilot := result.Agents["copilot"][0]
 	var copilotData map[string]interface{}
 	if err := json.Unmarshal([]byte(copilot.Content), &copilotData); err != nil {
 		t.Fatalf("copilot output not valid JSON: %v", err)
@@ -51,7 +57,7 @@ func TestSyncerSync(t *testing.T) {
 		}
 	}
 
-	vscode := result.Agents["vscode"]
+	vscode := result.Agents["vscode"][0]
 	var vscodeData map[string]interface{}
 	if err := json.Unmarshal([]byte(vscode.Content), &vscodeData); err != nil {
 		t.Fatalf("vscode output not valid JSON: %v", err)
@@ -63,7 +69,7 @@ func TestSyncerSync(t *testing.T) {
 		t.Fatalf("vscode server should not have tools added: %v", server)
 	}
 
-	codex := result.Agents["codex"]
+	codex := result.Agents["codex"][0]
 	if codex.Config.FilePath != "/custom/codex.toml" {
 		t.Fatalf("codex override not applied, got %s", codex.Config.FilePath)
 	}

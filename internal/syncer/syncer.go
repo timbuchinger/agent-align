@@ -113,7 +113,7 @@ func New(agents []AgentTarget) *Syncer {
 
 // SyncResult contains the output per agent plus the parsed server data.
 type SyncResult struct {
-	Agents  map[string]AgentResult
+	Agents  map[string][]AgentResult
 	Servers map[string]interface{}
 }
 
@@ -122,7 +122,7 @@ func (s *Syncer) Sync(servers map[string]interface{}) (SyncResult, error) {
 		return SyncResult{}, fmt.Errorf("server list cannot be empty")
 	}
 
-	outputs := make(map[string]AgentResult, len(s.Agents))
+	outputs := make(map[string][]AgentResult, len(s.Agents))
 	for _, agent := range s.Agents {
 		cfg, err := GetAgentConfig(agent.Name, agent.PathOverride)
 		if err != nil {
@@ -139,10 +139,10 @@ func (s *Syncer) Sync(servers map[string]interface{}) (SyncResult, error) {
 			return SyncResult{}, err
 		}
 
-		outputs[cfg.Name] = AgentResult{
+		outputs[cfg.Name] = append(outputs[cfg.Name], AgentResult{
 			Config:  cfg,
 			Content: formatConfig(cfg, agentServers),
-		}
+		})
 	}
 
 	return SyncResult{Agents: outputs, Servers: servers}, nil
