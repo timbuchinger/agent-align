@@ -47,6 +47,7 @@ func main() {
 	configPath := flag.String("config", defaultConfigPath(), "path to YAML configuration file describing target agents and overrides")
 	mcpConfigPath := flag.String("mcp-config", "", "path to YAML file that defines MCP servers (defaults to agent-align-mcp.yml next to the target config)")
 	dryRun := flag.Bool("dry-run", false, "only show what would be changed without applying changes")
+	debug := flag.Bool("debug", false, "print shell commands to test each MCP server and exit")
 	confirm := flag.Bool("confirm", false, "skip user confirmation prompt (useful for cron jobs)")
 
 	flag.Usage = func() {
@@ -130,6 +131,12 @@ func main() {
 	servers, err := mcpconfig.Load(resolvedMCPPath)
 	if err != nil {
 		log.Fatalf("failed to load MCP configuration %q: %v", resolvedMCPPath, err)
+	}
+
+	// If debug flag is provided, print a shell-ready command for each server and exit.
+	if *debug {
+		printDebugCommands(servers)
+		return
 	}
 
 	s := syncer.New(targetAgents)
@@ -636,4 +643,125 @@ func validateCommand(args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown command %q. Use -h for usage or run \"init\" to create a config.", arg)
+}
+
+// printDebugCommands emits a shell-ready test command for every MCP server definition
+// found in the provided map and prints them to stdout.
+func printDebugCommands(servers map[string]interface{}) {
+	var names []string
+	for name := range servers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		serverRaw := servers[name]
+		m, ok := serverRaw.(map[string]interface{})
+		if !ok {
+			// skip unexpected shapes
+			continue
+		}
+		cmd := formatServerCommand(m)
+		if cmd == "" {
+			fmt.Printf("%s: <cannot render command>\n", name)
+			continue
+		}
+		fmt.Printf("%s: %s\n", name, cmd)
+	}
+}
+
+// formatServerCommand builds a single-line shell command for a server mapping.
+// It concatenates environment assignments (KEY=VALUE) before the command and
+// properly quotes arguments.
+func formatServerCommand(m map[string]interface{}) string {
+	// command
+	cmdVal, ok := m["command"]
+	if !ok {
+		return ""
+	}
+	cmdStr, ok := cmdVal.(string)
+	if !ok || strings.TrimSpace(cmdStr) == "" {
+		return ""
+	}
+
+	// args may be an array
+	var args []string
+	if rawArgs, ok := m["args"]; ok {
+		switch v := rawArgs.(type) {
+		case []interface{}:
+			for _, ai := range v {
+				if s, ok := ai.(string); ok {
+					args = append(args, s)
+				}
+			}
+		case []string:
+			args = append(args, v...)
+		case string:
+			// single string argument
+			args = append(args, v)
+		}
+	}
+
+	// env may be a map
+	var envParts []string
+	if rawEnv, ok := m["env"]; ok {
+		if envMap, ok := rawEnv.(map[string]interface{}); ok {
+			// preserve insertion order by sorting keys
+			var keys []string
+			for k := range envMap {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				v := envMap[k]
+				sval := fmt.Sprintf("%v", v)
+				// if value looks like ${VAR} or starts with $ keep as-is
+				if (strings.HasPrefix(sval, "${") && strings.HasSuffix(sval, "}")) || strings.HasPrefix(sval, "$") {
+					envParts = append(envParts, fmt.Sprintf("%s=%s", k, sval))
+				} else {
+					envParts = append(envParts, fmt.Sprintf("%s=%s", k, shellQuote(sval)))
+				}
+			}
+		}
+	}
+
+	// build full command
+	var parts []string
+	if len(envParts) > 0 {
+		parts = append(parts, strings.Join(envParts, " "))
+	}
+	// quote the command itself if needed
+	parts = append(parts, shellQuote(cmdStr))
+	for _, a := range args {
+		parts = append(parts, shellQuote(a))
+	}
+	return strings.Join(parts, " ")
+}
+
+// shellQuote applies simple single-quote quoting suitable for POSIX shells.
+// If the string already looks like a shell variable reference (starts with $ or ${...})
+// it is returned unchanged.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if strings.HasPrefix(s, "${") && strings.HasSuffix(s, "}") {
+		return s
+	}
+	if strings.HasPrefix(s, "$") {
+		return s
+	}
+	// safe characters: alphanum, ./@-_:+=, don't quote
+	safe := true
+	for _, r := range s {
+		if !(r == '.' || r == '/' || r == '@' || r == '-' || r == '_' || r == ':' || r == '+' || r == '=' || (r >= '0' && r <= '9') || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')) {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	// escape single quotes by closing, inserting '\'' and reopening
+	escaped := strings.ReplaceAll(s, "'", "'\\''")
+	return "'" + escaped + "'"
 }
