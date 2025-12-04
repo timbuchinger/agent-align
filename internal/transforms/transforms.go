@@ -19,6 +19,8 @@ func GetTransformer(agent string) Transformer {
 	switch strings.ToLower(strings.TrimSpace(agent)) {
 	case "copilot":
 		return &CopilotTransformer{}
+	case "claudecode":
+		return &ClaudeTransformer{}
 	case "codex":
 		return &CodexTransformer{}
 	default:
@@ -163,6 +165,29 @@ func (t *CodexTransformer) Transform(servers map[string]interface{}) error {
 	delete(headers, "Authorization")
 	if len(headers) == 0 {
 		delete(server, "headers")
+	}
+	return nil
+}
+
+// ClaudeTransformer applies minimal Claude-specific conversions. Currently it
+// normalizes legacy transport names like "streamable-http" to "http" so that
+// Claude configs use the simpler transport type.
+type ClaudeTransformer struct{}
+
+// Transform applies Claude-specific normalizations.
+func (t *ClaudeTransformer) Transform(servers map[string]interface{}) error {
+	for _, serverRaw := range servers {
+		server, ok := serverRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if typ, ok := server["type"].(string); ok {
+			switch strings.ToLower(strings.TrimSpace(typ)) {
+			case "streamable-http":
+				server["type"] = "http"
+			}
+		}
 	}
 	return nil
 }

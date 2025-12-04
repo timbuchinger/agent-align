@@ -11,12 +11,14 @@ func TestGetTransformer(t *testing.T) {
 		agent       string
 		wantCopilot bool
 		wantCodex   bool
+		wantClaude  bool
 	}{
-		{"copilot", "copilot", true, false},
-		{"copilot spaced", " copilot ", true, false},
-		{"codex", "codex", false, true},
-		{"codex spaced", " codex ", false, true},
-		{"default", "vscode", false, false},
+		{"copilot", "copilot", true, false, false},
+		{"copilot spaced", " copilot ", true, false, false},
+		{"codex", "codex", false, true, false},
+		{"codex spaced", " codex ", false, true, false},
+		{"claude", "claudecode", false, false, true},
+		{"default", "vscode", false, false, false},
 	}
 
 	for _, tt := range tests {
@@ -24,12 +26,16 @@ func TestGetTransformer(t *testing.T) {
 			got := GetTransformer(tt.agent)
 			_, isCopilot := got.(*CopilotTransformer)
 			_, isCodex := got.(*CodexTransformer)
+			_, isClaude := got.(*ClaudeTransformer)
 
 			if isCopilot != tt.wantCopilot {
 				t.Fatalf("expected copilot=%v, got %v", tt.wantCopilot, isCopilot)
 			}
 			if isCodex != tt.wantCodex {
 				t.Fatalf("expected codex=%v, got %v", tt.wantCodex, isCodex)
+			}
+			if isClaude != tt.wantClaude {
+				t.Fatalf("expected claude=%v, got %v", tt.wantClaude, isClaude)
 			}
 		})
 	}
@@ -72,6 +78,27 @@ func TestCopilotTransformer_AddsToolsAndNormalizesTypes(t *testing.T) {
 	if servers["network-stdio"].(map[string]interface{})["type"] != "local" {
 		t.Errorf("expected stdio to be normalized to local, got %v", servers["network-stdio"].(map[string]interface{})["type"])
 	}
+	if servers["network-stream"].(map[string]interface{})["type"] != "http" {
+		t.Errorf("expected streamable-http to be normalized to http, got %v", servers["network-stream"].(map[string]interface{})["type"])
+	}
+}
+
+func TestClaudeTransformer_NormalizesTypes(t *testing.T) {
+	transformer := &ClaudeTransformer{}
+	servers := map[string]interface{}{
+		"network-stream": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "http://example.test",
+		},
+		"command": map[string]interface{}{
+			"command": "npx",
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	if servers["network-stream"].(map[string]interface{})["type"] != "http" {
 		t.Errorf("expected streamable-http to be normalized to http, got %v", servers["network-stream"].(map[string]interface{})["type"])
 	}
