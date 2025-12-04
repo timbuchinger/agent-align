@@ -337,8 +337,9 @@ func configTargetsToSyncer(targets []config.AgentTarget) []syncer.AgentTarget {
 	out := make([]syncer.AgentTarget, 0, len(targets))
 	for _, target := range targets {
 		out = append(out, syncer.AgentTarget{
-			Name:         target.Name,
-			PathOverride: target.Path,
+			Name:               target.Name,
+			PathOverride:       target.Path,
+			DisabledMcpServers: target.DisabledMcpServers,
 		})
 	}
 	return out

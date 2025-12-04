@@ -31,6 +31,8 @@ type TargetsConfig struct {
 type AgentTarget struct {
 	Name string `yaml:"name"`
 	Path string `yaml:"path,omitempty"`
+	// DisabledMcpServers lists MCP IDs that should be omitted for this agent.
+	DisabledMcpServers []string `yaml:"disabledMcpServers,omitempty"`
 }
 
 // AdditionalTargets lists paths for JSON-style destinations.
@@ -90,6 +92,7 @@ func (a *AgentTarget) UnmarshalYAML(node *yaml.Node) error {
 		}
 		a.Name = r.Name
 		a.Path = r.Path
+		a.DisabledMcpServers = r.DisabledMcpServers
 		return nil
 	default:
 		return fmt.Errorf("agent entry must be a string or mapping")
@@ -255,14 +258,24 @@ func normalizeTargets(targets TargetsConfig) TargetsConfig {
 				path = expanded
 			}
 		}
-		key := name + "|" + path
+		// Normalize disabled MCP list: trim entries and skip empty
+		var disabled []string
+		for _, d := range target.DisabledMcpServers {
+			t := strings.TrimSpace(d)
+			if t == "" {
+				continue
+			}
+			disabled = append(disabled, t)
+		}
+		key := name + "|" + path + "|" + strings.Join(disabled, ",")
 		if _, exists := seen[key]; exists {
 			continue
 		}
 		seen[key] = struct{}{}
 		agents = append(agents, AgentTarget{
-			Name: name,
-			Path: path,
+			Name:               name,
+			Path:               path,
+			DisabledMcpServers: disabled,
 		})
 	}
 	targets.Agents = agents

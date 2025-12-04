@@ -5,6 +5,9 @@ mcpServers:
     agents:
       - name: copilot
       - name: vscode
+        disabledMcpServers:
+          - gdrive
+          - box
       - name: codex
         path: /custom/.codex/config.toml
       - name: claudecode

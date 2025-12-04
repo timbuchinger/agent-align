@@ -17,6 +17,8 @@ import (
 type AgentTarget struct {
 	Name         string
 	PathOverride string
+	// DisabledMcpServers lists MCP IDs that should be omitted for this agent.
+	DisabledMcpServers []string
 }
 
 // AgentConfig holds information about an agent's configuration file.
@@ -132,6 +134,26 @@ func (s *Syncer) Sync(servers map[string]interface{}) (SyncResult, error) {
 		agentServers, err := deepCopyServers(servers)
 		if err != nil {
 			return SyncResult{}, err
+		}
+
+		// Remove any servers disabled for this agent before applying transforms.
+		for _, id := range agent.DisabledMcpServers {
+			trimmed := strings.TrimSpace(id)
+			if trimmed == "" {
+				continue
+			}
+			// Try exact match first
+			if _, ok := agentServers[trimmed]; ok {
+				delete(agentServers, trimmed)
+				continue
+			}
+			// Fallback to case-insensitive match
+			for k := range agentServers {
+				if strings.EqualFold(k, trimmed) {
+					delete(agentServers, k)
+					break
+				}
+			}
 		}
 
 		transformer := transforms.GetTransformer(cfg.Name)
@@ -396,7 +418,20 @@ func dedupeTargets(targets []AgentTarget) []AgentTarget {
 		if name == "" {
 			continue
 		}
-		key := name + "|" + strings.TrimSpace(target.PathOverride)
+		// Include a deterministic representation of disabled MCPs in the key
+		disabled := make([]string, 0, len(target.DisabledMcpServers))
+		for _, d := range target.DisabledMcpServers {
+			t := strings.TrimSpace(d)
+			if t == "" {
+				continue
+			}
+			disabled = append(disabled, t)
+		}
+		// Keep order consistent by sorting
+		if len(disabled) > 1 {
+			sort.Strings(disabled)
+		}
+		key := name + "|" + strings.TrimSpace(target.PathOverride) + "|" + strings.Join(disabled, ",")
 		if _, exists := seen[key]; exists {
 			continue
 		}
@@ -404,6 +439,7 @@ func dedupeTargets(targets []AgentTarget) []AgentTarget {
 		out = append(out, AgentTarget{
 			Name:         name,
 			PathOverride: strings.TrimSpace(target.PathOverride),
+			DisabledMcpServers: disabled,
 		})
 	}
 	return out
