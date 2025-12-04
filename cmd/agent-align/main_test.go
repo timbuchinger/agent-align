@@ -171,7 +171,6 @@ func TestVersionFlagOutput(t *testing.T) {
 		"-ldflags", fmt.Sprintf("-X main.version=%s", testVersion),
 		"-o", binPath,
 		"./")
-	buildCmd.Dir = filepath.Dir(".")
 	buildCmd.Env = append(os.Environ(), "GOCACHE=/tmp/agent-align-go-cache")
 	if output, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to build test binary: %v\n%s", err, output)
