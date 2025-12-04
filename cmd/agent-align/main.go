@@ -23,6 +23,9 @@ import (
 	"agent-align/internal/syncer"
 )
 
+// version is set at build time via -ldflags.
+var version = "dev"
+
 var (
 	promptUser    = askYes
 	collectConfig = promptForConfig
@@ -49,8 +52,10 @@ func main() {
 	dryRun := flag.Bool("dry-run", false, "only show what would be changed without applying changes")
 	debug := flag.Bool("debug", false, "print shell commands to test each MCP server and exit")
 	confirm := flag.Bool("confirm", false, "skip user confirmation prompt (useful for cron jobs)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 
 	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "agent-align version %s\n\n", version)
 		fmt.Fprintf(os.Stderr, "Usage: agent-align [OPTIONS]\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
@@ -62,6 +67,11 @@ func main() {
 	}
 
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("agent-align version %s\n", version)
+		return
+	}
 
 	resolvedConfigPath := *configPath
 	resolvedMCPPath := strings.TrimSpace(*mcpConfigPath)
