@@ -236,8 +236,8 @@ func parseFrontmatter(content string) (name, description string, err error) {
 
 	// Find the closing delimiter - start after opening "---\n" (position 4)
 	endIdx := -1
-	for i := 4; i < len(content)-3; i++ {
-		if content[i] == '\n' && i+3 < len(content) && content[i+1:i+4] == "---" {
+	for i := 4; i <= len(content)-4; i++ {
+		if content[i] == '\n' && content[i+1:i+4] == "---" {
 			endIdx = i
 			break
 		}
