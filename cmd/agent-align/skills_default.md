@@ -20,6 +20,4 @@ Skills, the agent must emulate them through instructions.
   - If a supporting file would normally be executed (e.g., a Bash helper
     script), the agent should **simulate its effects**.
 
----
-
 ## 📦 Available Skills
