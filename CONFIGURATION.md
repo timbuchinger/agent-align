@@ -17,7 +17,7 @@ servers:
     type: streamable-http
     url: https://api.example.com/mcp/
     headers:
-      Authorization: "Bearer REPLACE_WITH_GITHUB_TOKEN"
+      Authorization: "Bearer ${GITHUB_TOKEN}"
     tools: []
   claude-cli:
     command: npx
@@ -35,6 +35,45 @@ You can also use the legacy `mcpServers` key instead of `servers`. Each server
 entry is a mapping; the keys match the fields you would normally place in the
 agent-specific files (for example, `command`, `args`, `env`, `headers`,
 `alwaysAllow`, `autoApprove`, `disabled`, `tools`, `type`, and `url`).
+
+### Environment variable expansion
+
+All string values in the MCP definitions file support environment variable
+expansion using `${VAR}` or `$VAR` syntax. This allows you to securely
+reference secrets and configuration from your environment instead of
+hardcoding them in the YAML file.
+
+Default values are supported with the `${VAR:-default}` syntax. If the
+environment variable is not set or is empty, the default value will be used.
+
+**Examples:**
+
+```yaml
+servers:
+  secure-api:
+    type: streamable-http
+    url: https://api.example.com
+    headers:
+      # Reference environment variable directly
+      Authorization: "Bearer ${API_TOKEN}"
+  
+  database-server:
+    command: python
+    args:
+      - -m
+      - db_server
+      # Use default value if environment variable is not set
+      - --host=${DB_HOST:-localhost}
+      - --port=${DB_PORT:-5432}
+    env:
+      # Works in env blocks too
+      DB_PASSWORD: ${DB_PASSWORD}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+```
+
+Environment variables are expanded recursively in all string values
+throughout the configuration, including headers, URLs, command arguments,
+and environment variable definitions.
 
 ## Target config file (agent-align.yml)
 

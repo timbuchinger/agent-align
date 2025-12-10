@@ -3,6 +3,7 @@ package mcpconfig
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -37,5 +38,52 @@ func Load(path string) (map[string]interface{}, error) {
 		}
 	}
 
+	// Expand environment variables in all string values
+	expandEnvInMap(servers)
+
 	return servers, nil
+}
+
+// expandEnvInMap recursively expands environment variables in all string
+// values within a map[string]interface{}. It supports ${VAR} and $VAR syntax.
+func expandEnvInMap(m map[string]interface{}) {
+	for key, value := range m {
+		m[key] = expandEnvInValue(value)
+	}
+}
+
+// expandEnvInValue recursively expands environment variables in a value.
+// It handles strings, maps, slices, and nested structures.
+func expandEnvInValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case string:
+		return expandEnv(v)
+	case map[string]interface{}:
+		expandEnvInMap(v)
+		return v
+	case []interface{}:
+		for i, item := range v {
+			v[i] = expandEnvInValue(item)
+		}
+		return v
+	default:
+		return value
+	}
+}
+
+// expandEnv expands environment variables in a string.
+// It supports both ${VAR} and $VAR syntax.
+func expandEnv(s string) string {
+	return os.Expand(s, func(key string) string {
+		// Support ${VAR:-default} syntax
+		if strings.Contains(key, ":-") {
+			parts := strings.SplitN(key, ":-", 2)
+			val := os.Getenv(parts[0])
+			if val == "" {
+				return parts[1]
+			}
+			return val
+		}
+		return os.Getenv(key)
+	})
 }

@@ -1,23 +1,71 @@
 # Example MCP server definitions for agent-align-mcp.yml
+
+#
+
+# This file demonstrates environment variable expansion for secrets and
+
+# configuration. Variables can be referenced using ${VAR} or $VAR syntax
+
+# Default values are supported with ${VAR:-default} syntax
+
 servers:
+
+# Example using environment variables in HTTP headers for API tokens
+
   github:
     type: streamable-http
-    url: https://api.example.com/mcp/
+    url: <https://api.example.com/mcp/>
     headers:
-      Authorization: "Bearer REPLACE_WITH_GITHUB_TOKEN"
+      # Use ${GITHUB_TOKEN} to reference the environment variable
+      Authorization: "Bearer ${GITHUB_TOKEN}"
     autoApprove: true
     tools: []
+
+# Example using environment variables for API keys in command-based servers
+
   claude-cli:
     command: npx
     args:
       - '@example/mcp-server@latest'
     env:
+      # Reference environment variables directly
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # You can also use $VAR syntax (both work)
+      API_ENDPOINT: $CLAUDE_API_ENDPOINT
     alwaysAllow:
       - search
+
+# Example using default values when environment variables are not set
+
+  openai-server:
+    command: node
+    args:
+      - ./mcp-servers/openai/index.js
+    env:
+      # Use ${VAR:-default} to provide a fallback value
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-your-api-key-here}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4}
+      # Environment variables work in any string value
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+# Example showing environment variables can be used in URLs and paths
+
+  database-mcp:
+    command: python
+    args:
+      - -m
+      - database_mcp
+      - --connection
+      - "postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@${DB_HOST:-localhost}:${DB_PORT:-5432}/${DB_NAME:-mydb}"
+    env:
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+
+# Example with local prompts using relative paths
+
   local-prompts:
     command: ./scripts/run-prompts.sh
     args:
       - --watch
+      - --dir=${PROMPT_DIR:-./prompts}
     env:
-      PROMPT_DIR: ./prompts
+      PROMPT_DIR: ${PROMPT_DIR:-./prompts}
