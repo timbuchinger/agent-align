@@ -101,6 +101,12 @@ extraTargets:
     - source: /path/to/AGENTS.md
       destinations:
         - /path/to/other/AGENTS.md
+        - path: /path/to/enhanced/AGENTS.md
+          appendSkills:
+            - path: /path/to/skills/
+              ignoredSkills:
+                - test1
+                - test2
   directories:
     - source: /path/to/prompts
       destinations:
@@ -128,15 +134,18 @@ extraTargets:
   - `files` (sequence) – mirror a single source file to multiple destinations.
     Each entry must specify `source` and at least one `destinations` value.
     Each destination may be provided as a plain string (the destination path)
-    or as a mapping. Destinations support an optional `pathToSkills`
-    (string). When set, `agent-align` will append the `skills.md` template
-    from the config directory and any discovered `SKILL.md` files found under
-    the provided path to the copied destination file.
-    Destinations also accept an optional `frontmatterTemplate` (string).
-    When provided, the referenced file's contents will be written (as a
-    frontmatter/template block) to the destination before any `skills.md`
-    content is appended. This is useful when copying prompt files that need
-    YAML frontmatter or a fixed header.
+    or as a mapping with additional options:
+    - `path` (string, required) – destination file path.
+    - `frontmatterTemplate` (string, optional) – path to a file whose contents
+      will be written as frontmatter/template block to the destination before
+      any skills content is appended. Useful for copying prompt files that
+      need YAML frontmatter or a fixed header.
+    - `appendSkills` (sequence, optional) – append skills from one or more
+      directories. Each entry specifies:
+      - `path` (string, required) – directory containing SKILL.md files.
+      - `ignoredSkills` (sequence, optional) – skill names to exclude.
+    - `pathToSkills` (string, optional) – deprecated, use `appendSkills`
+      instead. Single directory path for appending skills.
   - `directories` (sequence) – copy every file within `source` to each entry in
     `destinations`. Every destination entry must specify a `path` and may set
     `flatten: true` to drop the source directory structure while copying.

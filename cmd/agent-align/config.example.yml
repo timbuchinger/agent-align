@@ -22,6 +22,12 @@ extraTargets:
       destinations:
         - path: /path/to/other/AGENTS.md
         - path: /path/to/another/AGENTS.md
+          appendSkills:
+            - path: /path/to/skills/
+              ignoredSkills:
+                - test1
+                - test2
+        - path: /path/to/another/AGENTS.md
           pathToSkills: /path/to/skills/
         - path: /path/to/yet/another/AGENTS.md
           frontmatterTemplate: /path/to/frontmatter-template.md
