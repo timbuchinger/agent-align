@@ -30,6 +30,9 @@ extraTargets:
                 - test1
                 - test2
         - path: /path/to/another/AGENTS.md
+          pathToSkills: /path/to/skills/
+        - path: /path/to/another/AGENTS.md
+          frontmatterTemplate: /path/to/frontmatter-template.md
   directories:
     - source: /path/to/prompts
       destinations:
