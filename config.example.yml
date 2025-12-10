@@ -24,10 +24,10 @@ extraTargets:
     - source: /path/to/AGENTS.md
       destinations:
         - path: /path/to/other/AGENTS.md
-          pathToSkills: /path/to/skills/
         - path: /path/to/another/AGENTS.md
+          pathToSkills: /path/to/skills/
         - path: /path/to/yet/another/AGENTS.md
-          frontmatterPath: /path/to/frontmatter.md
+          frontmatterTemplate: /path/to/frontmatter-template.md
   directories:
     - source: /path/to/prompts
       destinations:

@@ -32,11 +32,14 @@ on GitHub Pages at <https://timbuchinger.github.io/agent-align/>.
        type: streamable-http
        url: https://api.example.com/mcp/
        headers:
-         Authorization: "Bearer REPLACE_WITH_GITHUB_TOKEN"
+         Authorization: "Bearer ${GITHUB_TOKEN}"
    ```
 
-   See `config-mcp.example.yml` for a more complete template with command-based
-   servers and environment variables.
+   The MCP definitions file supports environment variable expansion using
+   `${VAR}` or `$VAR` syntax, allowing you to securely reference secrets from
+   your environment. Default values can be specified with `${VAR:-default}`
+   syntax. See `config-mcp.example.yml` for a more complete template with
+   command-based servers and environment variables.
 
 3. Create a target config; for example, save this to `agent-align.yml`:
 
