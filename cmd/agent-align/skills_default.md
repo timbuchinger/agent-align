@@ -1,4 +1,3 @@
-```markdown
 # 🧩 Skills
 
 Skills are reusable, domain-specific workflows that the agent can invoke to
@@ -24,5 +23,3 @@ Skills, the agent must emulate them through instructions.
 ---
 
 ## 📦 Available Skills
-
-```
