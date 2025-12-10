@@ -111,6 +111,8 @@ extraTargets:
     - source: /path/to/prompts
       destinations:
         - path: /path/to/another/prompts
+          excludeGlobs:
+            - 'troubleshoot/**'
           flatten: true
 ```
 
@@ -148,7 +150,10 @@ extraTargets:
       instead. Single directory path for appending skills.
   - `directories` (sequence) – copy every file within `source` to each entry in
     `destinations`. Every destination entry must specify a `path` and may set
+    `excludeGlobs` (sequence of glob patterns) to skip matching files, and/or
     `flatten: true` to drop the source directory structure while copying.
+    Glob patterns support `**` for recursive matching (e.g., `dir/**` excludes
+    all files under `dir/`, `*.log` excludes all log files).
 
 ## Supported Agents and defaults
 

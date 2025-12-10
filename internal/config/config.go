@@ -74,8 +74,9 @@ type ExtraDirectoryTarget struct {
 
 // ExtraDirectoryCopyRoute describes how a single destination should be written.
 type ExtraDirectoryCopyRoute struct {
-	Path    string `yaml:"path"`
-	Flatten bool   `yaml:"flatten"`
+	Path         string   `yaml:"path"`
+	ExcludeGlobs []string `yaml:"excludeGlobs,omitempty"`
+	Flatten      bool     `yaml:"flatten"`
 }
 
 // AdditionalJSONTarget describes a JSON file that should receive the MCP payload.
@@ -108,7 +109,7 @@ func (e *ExtraFileCopyRoute) UnmarshalYAML(node *yaml.Node) error {
 		e.PathToSkills = r.PathToSkills
 		e.AppendSkills = r.AppendSkills
 		e.FrontmatterPath = r.FrontmatterPath
-		
+
 		// Backward compatibility: convert pathToSkills to appendSkills
 		if e.PathToSkills != "" && len(e.AppendSkills) == 0 {
 			e.AppendSkills = []AppendSkill{{Path: e.PathToSkills}}
@@ -240,7 +241,7 @@ func Load(path string) (Config, error) {
 			if err != nil {
 				return Config{}, fmt.Errorf("config at %q has an extra file target destination %q: %w", path, trimmedPath, err)
 			}
-			
+
 			// Handle deprecated PathToSkills
 			trimmedSkills := strings.TrimSpace(dest.PathToSkills)
 			var expandedSkills string
@@ -250,7 +251,7 @@ func Load(path string) (Config, error) {
 					return Config{}, fmt.Errorf("config at %q has an extra file target pathToSkills %q: %w", path, trimmedSkills, err)
 				}
 			}
-			
+
 			// Handle new AppendSkills
 			var expandedAppendSkills []AppendSkill
 			for _, skill := range dest.AppendSkills {
@@ -262,7 +263,7 @@ func Load(path string) (Config, error) {
 				if err != nil {
 					return Config{}, fmt.Errorf("config at %q has an appendSkills path %q: %w", path, trimmedSkillPath, err)
 				}
-				
+
 				// Trim ignoredSkills entries
 				var ignoredSkills []string
 				for _, ignored := range skill.IgnoredSkills {
@@ -271,13 +272,13 @@ func Load(path string) (Config, error) {
 						ignoredSkills = append(ignoredSkills, trimmed)
 					}
 				}
-				
+
 				expandedAppendSkills = append(expandedAppendSkills, AppendSkill{
 					Path:          expandedSkillPath,
 					IgnoredSkills: ignoredSkills,
 				})
 			}
-			
+
 			// Handle FrontmatterPath
 			trimmedFrontmatter := strings.TrimSpace(dest.FrontmatterPath)
 			var expandedFrontmatter string
@@ -287,7 +288,7 @@ func Load(path string) (Config, error) {
 					return Config{}, fmt.Errorf("config at %q has an extra file target frontmatterPath %q: %w", path, trimmedFrontmatter, err)
 				}
 			}
-			
+
 			routes = append(routes, ExtraFileCopyRoute{
 				Path:            expandedPath,
 				PathToSkills:    expandedSkills,
@@ -321,9 +322,19 @@ func Load(path string) (Config, error) {
 			if err != nil {
 				return Config{}, fmt.Errorf("config at %q has an extra directory destination %q: %w", path, trimmed, err)
 			}
+			// Trim and validate excludeGlobs entries
+			var excludeGlobs []string
+			for _, glob := range dest.ExcludeGlobs {
+				trimmedGlob := strings.TrimSpace(glob)
+				if trimmedGlob == "" {
+					continue
+				}
+				excludeGlobs = append(excludeGlobs, trimmedGlob)
+			}
 			routes = append(routes, ExtraDirectoryCopyRoute{
-				Path:    expandedPath,
-				Flatten: dest.Flatten,
+				Path:         expandedPath,
+				ExcludeGlobs: excludeGlobs,
+				Flatten:      dest.Flatten,
 			})
 		}
 		if len(routes) == 0 {

@@ -1,6 +1,6 @@
-# Example target config for agent-align.yml (keep in sync with cmd/agent-align/config.example.yml)
+# Example target config for agent-align.yml
 mcpServers:
-  configPath: agent-align-mcp.yml
+  configPath: config-mcp.example.yml
   targets:
     agents:
       - name: copilot
@@ -37,5 +37,7 @@ extraTargets:
     - source: /path/to/prompts
       destinations:
         - path: /path/to/other/prompts
+          excludeGlobs:
+            - 'troubleshoot/**'
           flatten: true
         - path: /path/to/another/prompts

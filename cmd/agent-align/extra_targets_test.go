@@ -144,9 +144,143 @@ func TestCopyExtraDirectoryTargetFlatten(t *testing.T) {
 	}
 }
 
+func TestCopyExtraDirectoryTargetExcludeGlobs(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "src")
+
+	// Create directory structure
+	if err := os.MkdirAll(filepath.Join(source, "troubleshoot"), 0o755); err != nil {
+		t.Fatalf("failed to create troubleshoot dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(source, "docs"), 0o755); err != nil {
+		t.Fatalf("failed to create docs dir: %v", err)
+	}
+
+	// Create files
+	if err := os.WriteFile(filepath.Join(source, "main.txt"), []byte("main"), 0o644); err != nil {
+		t.Fatalf("failed to write main.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "troubleshoot", "debug.log"), []byte("debug"), 0o644); err != nil {
+		t.Fatalf("failed to write debug.log: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "troubleshoot", "errors.txt"), []byte("errors"), 0o644); err != nil {
+		t.Fatalf("failed to write errors.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "docs", "readme.md"), []byte("readme"), 0o644); err != nil {
+		t.Fatalf("failed to write readme.md: %v", err)
+	}
+
+	dest := filepath.Join(dir, "dest")
+	target := config.ExtraDirectoryTarget{
+		Source: source,
+		Destinations: []config.ExtraDirectoryCopyRoute{
+			{
+				Path:         dest,
+				ExcludeGlobs: []string{"troubleshoot/**"},
+			},
+		},
+	}
+	count, err := copyExtraDirectoryTarget(target)
+	if err != nil {
+		t.Fatalf("copyExtraDirectoryTarget returned error: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 files copied (excluding troubleshoot/**), got %d", count)
+	}
+
+	// Verify main.txt was copied
+	if _, err := os.Stat(filepath.Join(dest, "main.txt")); err != nil {
+		t.Fatalf("expected main.txt to exist: %v", err)
+	}
+
+	// Verify docs/readme.md was copied
+	if _, err := os.Stat(filepath.Join(dest, "docs", "readme.md")); err != nil {
+		t.Fatalf("expected docs/readme.md to exist: %v", err)
+	}
+
+	// Verify troubleshoot files were NOT copied
+	if _, err := os.Stat(filepath.Join(dest, "troubleshoot", "debug.log")); !os.IsNotExist(err) {
+		t.Fatalf("expected troubleshoot/debug.log to NOT exist")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "troubleshoot", "errors.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected troubleshoot/errors.txt to NOT exist")
+	}
+}
+
+func TestCopyExtraDirectoryTargetMultipleExcludeGlobs(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "src")
+
+	// Create directory structure
+	if err := os.MkdirAll(filepath.Join(source, "logs"), 0o755); err != nil {
+		t.Fatalf("failed to create logs dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(source, "temp"), 0o755); err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+
+	// Create files
+	if err := os.WriteFile(filepath.Join(source, "main.go"), []byte("main"), 0o644); err != nil {
+		t.Fatalf("failed to write main.go: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "README.md"), []byte("readme"), 0o644); err != nil {
+		t.Fatalf("failed to write README.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "logs", "app.log"), []byte("log"), 0o644); err != nil {
+		t.Fatalf("failed to write app.log: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "temp", "cache.tmp"), []byte("cache"), 0o644); err != nil {
+		t.Fatalf("failed to write cache.tmp: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "test.tmp"), []byte("test"), 0o644); err != nil {
+		t.Fatalf("failed to write test.tmp: %v", err)
+	}
+
+	dest := filepath.Join(dir, "dest")
+	target := config.ExtraDirectoryTarget{
+		Source: source,
+		Destinations: []config.ExtraDirectoryCopyRoute{
+			{
+				Path: dest,
+				ExcludeGlobs: []string{
+					"logs/**",
+					"temp/**",
+					"*.tmp",
+				},
+			},
+		},
+	}
+	count, err := copyExtraDirectoryTarget(target)
+	if err != nil {
+		t.Fatalf("copyExtraDirectoryTarget returned error: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 files copied (excluding logs/**, temp/**, *.tmp), got %d", count)
+	}
+
+	// Verify main.go and README.md were copied
+	if _, err := os.Stat(filepath.Join(dest, "main.go")); err != nil {
+		t.Fatalf("expected main.go to exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "README.md")); err != nil {
+		t.Fatalf("expected README.md to exist: %v", err)
+	}
+
+	// Verify excluded files were NOT copied
+	if _, err := os.Stat(filepath.Join(dest, "logs", "app.log")); !os.IsNotExist(err) {
+		t.Fatalf("expected logs/app.log to NOT exist")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "temp", "cache.tmp")); !os.IsNotExist(err) {
+		t.Fatalf("expected temp/cache.tmp to NOT exist")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "test.tmp")); !os.IsNotExist(err) {
+		t.Fatalf("expected test.tmp to NOT exist")
+	}
+}
+
 func TestCopyExtraFileTargetWithSkills(t *testing.T) {
 	dir := t.TempDir()
-	
+
 	// Create source file
 	source := filepath.Join(dir, "AGENTS.md")
 	if err := os.WriteFile(source, []byte("# Original Content\n"), 0o644); err != nil {
@@ -236,7 +370,7 @@ description: Use when reviewing code for best practices and common issues
 
 func TestCopyExtraFileTargetMixedDestinations(t *testing.T) {
 	dir := t.TempDir()
-	
+
 	// Create source file
 	source := filepath.Join(dir, "AGENTS.md")
 	if err := os.WriteFile(source, []byte("content"), 0o644); err != nil {
@@ -256,7 +390,7 @@ func TestCopyExtraFileTargetMixedDestinations(t *testing.T) {
 
 	dest1 := filepath.Join(dir, "dest1.md")
 	dest2 := filepath.Join(dir, "dest2.md")
-	
+
 	target := config.ExtraFileTarget{
 		Source: source,
 		Destinations: []config.ExtraFileCopyRoute{
@@ -444,7 +578,7 @@ tools: ['edit', 'view', [MCP]]
 
 func TestDiscoverSkills(t *testing.T) {
 	dir := t.TempDir()
-	
+
 	// Create nested directory structure with SKILL.md files
 	if err := os.MkdirAll(filepath.Join(dir, "skill1"), 0o755); err != nil {
 		t.Fatalf("failed to create skill1 dir: %v", err)
@@ -499,7 +633,7 @@ description: Second skill
 
 func TestDiscoverSkillsWithIgnoreList(t *testing.T) {
 	dir := t.TempDir()
-	
+
 	// Create nested directory structure with SKILL.md files
 	if err := os.MkdirAll(filepath.Join(dir, "skill1"), 0o755); err != nil {
 		t.Fatalf("failed to create skill1 dir: %v", err)

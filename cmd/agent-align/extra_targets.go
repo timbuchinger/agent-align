@@ -16,6 +16,59 @@ import (
 
 const minFrontmatterLength = 10 // "---\nx\n---" minimum valid frontmatter
 
+// matchGlob matches a path against a glob pattern, supporting ** for recursive matching.
+func matchGlob(pattern, path string) bool {
+	// Normalize pattern to use forward slashes
+	pattern = filepath.ToSlash(pattern)
+
+	// Handle ** patterns for recursive matching
+	if strings.Contains(pattern, "**") {
+		// Split pattern on **
+		parts := strings.Split(pattern, "**")
+		if len(parts) == 2 {
+			prefix := strings.TrimSuffix(parts[0], "/")
+			suffix := strings.TrimPrefix(parts[1], "/")
+
+			// Check prefix match
+			if prefix != "" && !strings.HasPrefix(path, prefix) {
+				return false
+			}
+
+			// Check suffix match
+			if suffix != "" {
+				// For patterns like "dir/**", match any file under dir/
+				if prefix != "" && suffix == "" {
+					return strings.HasPrefix(path, prefix+"/")
+				}
+				// For patterns like "**/file.txt", match file.txt anywhere
+				if prefix == "" && suffix != "" {
+					matched, _ := filepath.Match(suffix, filepath.Base(path))
+					if matched {
+						return true
+					}
+					return strings.HasSuffix(path, "/"+suffix) || path == suffix
+				}
+				// For patterns like "dir/**/file.txt"
+				if prefix != "" && suffix != "" {
+					if !strings.HasPrefix(path, prefix+"/") {
+						return false
+					}
+					matched, _ := filepath.Match(suffix, filepath.Base(path))
+					if matched {
+						return true
+					}
+					return strings.HasSuffix(path, "/"+suffix)
+				}
+			}
+			return true
+		}
+	}
+
+	// Fall back to standard filepath.Match for simple patterns
+	matched, _ := filepath.Match(pattern, path)
+	return matched
+}
+
 func copyExtraFileTarget(target config.ExtraFileTarget, configDir string, mcpServers map[string]interface{}) error {
 	info, err := os.Stat(target.Source)
 	if err != nil {
@@ -43,7 +96,7 @@ func copyExtraDirectoryTarget(target config.ExtraDirectoryTarget) (int, error) {
 
 	var total int
 	for _, dest := range target.Destinations {
-		count, err := copyDirectory(target.Source, dest.Path, dest.Flatten)
+		count, err := copyDirectory(target.Source, dest.Path, dest.Flatten, dest.ExcludeGlobs)
 		if err != nil {
 			return total, fmt.Errorf("failed to copy directory %s to %s: %w", target.Source, dest.Path, err)
 		}
@@ -52,7 +105,7 @@ func copyExtraDirectoryTarget(target config.ExtraDirectoryTarget) (int, error) {
 	return total, nil
 }
 
-func copyDirectory(source, destination string, flatten bool) (int, error) {
+func copyDirectory(source, destination string, flatten bool, excludeGlobs []string) (int, error) {
 	var copied int
 	walkErr := filepath.WalkDir(source, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -62,14 +115,23 @@ func copyDirectory(source, destination string, flatten bool) (int, error) {
 			return nil
 		}
 
+		// Check if the file should be excluded
+		rel, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		// Normalize path separator to forward slash for consistent matching
+		relPath := filepath.ToSlash(rel)
+		for _, pattern := range excludeGlobs {
+			if matchGlob(pattern, relPath) {
+				return nil // Skip this file
+			}
+		}
+
 		var destPath string
 		if flatten {
 			destPath = filepath.Join(destination, filepath.Base(path))
 		} else {
-			rel, err := filepath.Rel(source, path)
-			if err != nil {
-				return err
-			}
 			destPath = filepath.Join(destination, rel)
 		}
 
