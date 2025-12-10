@@ -194,11 +194,17 @@ func processFrontmatterTemplate(out *os.File, frontmatterPath, sourceContent str
 
 // appendSkillsContent reads skills.md from configDir and appends it along with discovered SKILL.md files
 func appendSkillsContent(out *os.File, pathToSkills, configDir string, ignoredSkills []string) error {
-	// First, read and append the skills.md template from configDir
+	// First, try to read and append the skills.md template from configDir. If it
+	// doesn't exist, fall back to the embedded default so the binary can be
+	// distributed standalone.
 	skillsTemplatePath := filepath.Join(configDir, "skills.md")
 	templateData, err := os.ReadFile(skillsTemplatePath)
 	if err != nil {
-		return fmt.Errorf("failed to read skills template %s: %w", skillsTemplatePath, err)
+		if os.IsNotExist(err) {
+			templateData = []byte(embeddedSkillsMD)
+		} else {
+			return fmt.Errorf("failed to read skills template %s: %w", skillsTemplatePath, err)
+		}
 	}
 
 	// Write a newline before appending to ensure separation
