@@ -21,3 +21,8 @@ Skills, the agent must emulate them through instructions.
     script), the agent should **simulate its effects**.
 
 ## 📦 Available Skills
+
+All skills are located in `~/git/loadout/skills/`. Each skill resides in its
+own subdirectory, with the main skill content in a file named `SKILL.md`.
+Supporting files (scripts, templates, examples) for each skill are also stored
+in that subdirectory.
