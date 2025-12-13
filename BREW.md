@@ -80,7 +80,7 @@ In the **agent-align** repository (this repository), configure the following:
 
 #### Required Variables
 
-2. **HOMEBREW_TAP_REPO**: The full repository name for the homebrew tap in
+1. **HOMEBREW_TAP_REPO**: The full repository name for the homebrew tap in
    the format `owner/repo`.
 
    Example: `timbuchinger/homebrew-agent-align`

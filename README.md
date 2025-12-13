@@ -42,7 +42,6 @@ go build ./cmd/agent-align
 ```
 
 ### Configuration
-### Configuration
 
 1. Create an MCP definitions file to act as the source of truth; for example,
    save this to `agent-align-mcp.yml` next to the binary:
@@ -79,7 +78,7 @@ go build ./cmd/agent-align
    You can also run `agent-align init -config /path/to/agent-align.yml` to walk
    through the same settings interactively.
 
-4. Run the app with your config files:
+3. Run the app with your config files:
 
    ```bash
    ./agent-align -config agent-align.yml -mcp-config agent-align-mcp.yml
