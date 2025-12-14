@@ -149,7 +149,7 @@ jobs:
       - name: Update Homebrew Tap
         if: always()
         env:
-          TAP_TOKEN: ${{ secrets.TAP_REPO_TOKEN }}
+          TAP_REPO_SSH_KEY: ${{ secrets.TAP_REPO_SSH_KEY }}
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           set -euo pipefail
@@ -183,7 +183,22 @@ jobs:
           done
 
           # Clone tap and update formula file
-          git clone https://x-access-token:${TAP_TOKEN}@github.com/timbuchinger/homebrew-tap.git
+          # Require SSH deploy key (no HTTPS fallback)
+          if [ -z "${TAP_REPO_SSH_KEY:-}" ]; then
+            echo "Error: TAP_REPO_SSH_KEY secret not set. Aborting."
+            exit 1
+          fi
+
+          echo "Using SSH key to clone Homebrew tap"
+          mkdir -p ~/.ssh
+          # Write key to a temporary file and add to ssh-agent
+          printf '%s' "$TAP_REPO_SSH_KEY" > /tmp/tap_key
+          chmod 600 /tmp/tap_key
+          eval "$(ssh-agent -s)"
+          ssh-add /tmp/tap_key
+          # Ensure GitHub host key is known to avoid prompts
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git clone git@github.com:timbuchinger/homebrew-tap.git
           cd homebrew-tap
 
           # Build new on_macos and on_linux blocks
