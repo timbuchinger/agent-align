@@ -182,11 +182,12 @@ jobs:
             echo "$a -> ${shas[$a]}"
           done
 
-          # Expose SHAs as step outputs so subsequent steps can access them
+          # Expose SHAs and VER as step outputs so subsequent steps can access them
           echo "DARWIN_ARM_SHA=${shas[agent-align-darwin-arm64.tar.gz]}" >> "$GITHUB_OUTPUT"
           echo "DARWIN_AMD_SHA=${shas[agent-align-darwin-amd64.tar.gz]}" >> "$GITHUB_OUTPUT"
           echo "LINUX_AMD_SHA=${shas[agent-align-linux-amd64.tar.gz]}" >> "$GITHUB_OUTPUT"
           echo "LINUX_ARM_SHA=${shas[agent-align-linux-arm64.tar.gz]}" >> "$GITHUB_OUTPUT"
+          echo "VER=${VER}" >> "$GITHUB_OUTPUT"
 
           # Clone tap and update formula file
           # Use official ssh-agent action to load the private key securely
@@ -209,46 +210,11 @@ jobs:
           git clone git@github.com:timbuchinger/homebrew-tap.git
           cd homebrew-tap
 
-          # Build new on_macos and on_linux blocks
-          new_macos='on_macos do
-            on_arm do
-              url "https://github.com/timbuchinger/agent-align/releases/download/v#{version}/agent-align-darwin-arm64.tar.gz"
-              sha256 "<DARWIN_ARM_SHA>"
-            end
-            on_intel do
-              url "https://github.com/timbuchinger/agent-align/releases/download/v#{version}/agent-align-darwin-amd64.tar.gz"
-              sha256 "<DARWIN_AMD_SHA>"
-            end
-          end'
-
-          new_linux='on_linux do
-            on_intel do
-              url "https://github.com/timbuchinger/agent-align/releases/download/v#{version}/agent-align-linux-amd64.tar.gz"
-              sha256 "<LINUX_AMD_SHA>"
-            end
-            on_arm do
-              url "https://github.com/timbuchinger/agent-align/releases/download/v#{version}/agent-align-linux-arm64.tar.gz"
-              sha256 "<LINUX_ARM_SHA>"
-            end
-          end'
-
-          # SHAs are provided via step outputs (see previous step)
-          # available here as environment variables: $DARWIN_ARM_SHA, $DARWIN_AMD_SHA,
-          # $LINUX_AMD_SHA, $LINUX_ARM_SHA
-
-          # Inject SHAs into template blocks (replace placeholder tokens)
-          new_macos=${new_macos//<DARWIN_ARM_SHA>/$DARWIN_ARM_SHA}
-          new_macos=${new_macos//<DARWIN_AMD_SHA>/$DARWIN_AMD_SHA}
-          new_linux=${new_linux//<LINUX_AMD_SHA>/$LINUX_AMD_SHA}
-          new_linux=${new_linux//<LINUX_ARM_SHA>/$LINUX_ARM_SHA}
-
-          # Write replacement blocks to temp files to avoid quoting/escaping issues
-          printf '%s\n' "$new_macos" > /tmp/new_macos.rb
-          printf '%s\n' "$new_linux" > /tmp/new_linux.rb
-
-          # Replace existing blocks using perl, reading replacements from files
-          perl -0777 -i -pe 'BEGIN{ local $/; open my $fh, "<", "/tmp/new_macos.rb" or die $!; $r=<$fh>; } s/on_macos do.*?end\n/$r\n/s' Formula/agent-align.rb
-          perl -0777 -i -pe 'BEGIN{ local $/; open my $fh, "<", "/tmp/new_linux.rb" or die $!; $r=<$fh>; } s/on_linux do.*?end\n/$r\n/s' Formula/agent-align.rb
+          # Generate the formula file from the template using the generator script.
+          # The template lives in ../homebrew-tap/Formula/agent-align.rb.erb
+          # and the generator script lives in scripts/generate_formula.rb
+          echo "Generating Formula file from template"
+          ruby ../scripts/generate_formula.rb
 
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
