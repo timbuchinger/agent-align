@@ -138,7 +138,7 @@ extraTargets:
     Each destination may be provided as a plain string (the destination path)
     or as a mapping with additional options:
     - `path` (string, required) – destination file path.
-    - `frontmatterTemplate` (string, optional) – path to a file whose contents
+    - `frontmatterPath` (string, optional) – path to a file whose contents
       will be written as frontmatter/template block to the destination before
       any skills content is appended. Useful for copying prompt files that
       need YAML frontmatter or a fixed header.

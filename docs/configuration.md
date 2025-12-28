@@ -132,7 +132,7 @@ Note: Kilocode config paths
 - `-dry-run` – Preview changes without writing.
 - `-confirm` – Skip the confirmation prompt when applying writes.
 
-Destinations also accept an optional `frontmatterTemplate` (string).
+Destinations also accept an optional `frontmatterPath` (string).
 When provided, the referenced file's contents will be written (as a
 frontmatter/template block) to the destination before any `skills.md`
 content is appended. This is useful when copying prompt files that need
