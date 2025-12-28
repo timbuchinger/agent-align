@@ -156,12 +156,19 @@ extraTargets:
       - `ignoredSkills` (sequence, optional) – skill names to exclude.
     - `pathToSkills` (string, optional) – deprecated, use `appendSkills`
       instead. Single directory path for appending skills.
+    - `appendToFilename` (string, optional) – string to insert before the
+      destination filename's extension. Example: with `.prompt`, `plan.md` ->
+      `plan.prompt.md`. If the source file has no extension the value is
+      appended to the end of the filename.
   - `directories` (sequence) – copy every file within `source` to each entry in
     `destinations`. Every destination entry must specify a `path` and may set
     `excludeGlobs` (sequence of glob patterns) to skip matching files, and/or
     `flatten: true` to drop the source directory structure while copying.
     Glob patterns support `**` for recursive matching (e.g., `dir/**` excludes
     all files under `dir/`, `*.log` excludes all log files).
+    - `appendToFilename` (string, optional) – insert the given string before
+      each copied file's extension. Useful for adding agent-specific suffixes
+      like `.prompt` so `plan.md` becomes `plan.prompt.md`.
 
 ## Supported Agents and defaults
 

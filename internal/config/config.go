@@ -65,6 +65,7 @@ type ExtraFileCopyRoute struct {
 	PathToSkills    string        `yaml:"pathToSkills,omitempty"` // Deprecated: use AppendSkills
 	AppendSkills    []AppendSkill `yaml:"appendSkills,omitempty"`
 	FrontmatterPath string        `yaml:"frontmatterPath,omitempty"`
+	AppendToFilename string       `yaml:"appendToFilename,omitempty"`
 }
 
 // ExtraDirectoryTarget copies an entire directory, optionally flattening the files.
@@ -78,6 +79,7 @@ type ExtraDirectoryCopyRoute struct {
 	Path         string   `yaml:"path"`
 	ExcludeGlobs []string `yaml:"excludeGlobs,omitempty"`
 	Flatten      bool     `yaml:"flatten"`
+	AppendToFilename string `yaml:"appendToFilename,omitempty"`
 }
 
 // AdditionalJSONTarget describes a JSON file that should receive the MCP payload.
@@ -303,11 +305,15 @@ func Load(path string) (Config, error) {
 				}
 			}
 
+			// Handle AppendToFilename (no path expansion)
+			trimmedAppend := strings.TrimSpace(dest.AppendToFilename)
+
 			routes = append(routes, ExtraFileCopyRoute{
 				Path:            expandedPath,
 				PathToSkills:    expandedSkills,
 				AppendSkills:    expandedAppendSkills,
 				FrontmatterPath: expandedFrontmatter,
+				AppendToFilename: trimmedAppend,
 			})
 		}
 		if len(routes) == 0 {
@@ -345,10 +351,14 @@ func Load(path string) (Config, error) {
 				}
 				excludeGlobs = append(excludeGlobs, trimmedGlob)
 			}
+
+			// Handle AppendToFilename (no path expansion)
+			trimmedAppend := strings.TrimSpace(dest.AppendToFilename)
 			routes = append(routes, ExtraDirectoryCopyRoute{
 				Path:         expandedPath,
 				ExcludeGlobs: excludeGlobs,
 				Flatten:      dest.Flatten,
+				AppendToFilename: trimmedAppend,
 			})
 		}
 		if len(routes) == 0 {

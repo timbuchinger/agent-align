@@ -44,3 +44,4 @@ extraTargets:
             - 'troubleshoot/**'
           flatten: true
         - path: /path/to/another/prompts
+          appendToFilename: ".prompt"

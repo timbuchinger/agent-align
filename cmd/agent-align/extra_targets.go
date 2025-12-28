@@ -96,7 +96,7 @@ func copyExtraDirectoryTarget(target config.ExtraDirectoryTarget) (int, error) {
 
 	var total int
 	for _, dest := range target.Destinations {
-		count, err := copyDirectory(target.Source, dest.Path, dest.Flatten, dest.ExcludeGlobs)
+		count, err := copyDirectory(target.Source, dest.Path, dest.Flatten, dest.ExcludeGlobs, dest.AppendToFilename)
 		if err != nil {
 			return total, fmt.Errorf("failed to copy directory %s to %s: %w", target.Source, dest.Path, err)
 		}
@@ -105,7 +105,7 @@ func copyExtraDirectoryTarget(target config.ExtraDirectoryTarget) (int, error) {
 	return total, nil
 }
 
-func copyDirectory(source, destination string, flatten bool, excludeGlobs []string) (int, error) {
+func copyDirectory(source, destination string, flatten bool, excludeGlobs []string, appendToFilename string) (int, error) {
 	var copied int
 	walkErr := filepath.WalkDir(source, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -129,10 +129,16 @@ func copyDirectory(source, destination string, flatten bool, excludeGlobs []stri
 		}
 
 		var destPath string
+		baseName := filepath.Base(path)
+		if appendToFilename != "" {
+			ext := filepath.Ext(baseName)
+			nameOnly := strings.TrimSuffix(baseName, ext)
+			baseName = nameOnly + appendToFilename + ext
+		}
 		if flatten {
-			destPath = filepath.Join(destination, filepath.Base(path))
+			destPath = filepath.Join(destination, baseName)
 		} else {
-			destPath = filepath.Join(destination, rel)
+			destPath = filepath.Join(destination, filepath.Dir(rel), baseName)
 		}
 
 		info, err := entry.Info()

@@ -43,4 +43,6 @@ extraTargets:
           excludeGlobs:
             - 'troubleshoot/**'
           flatten: true
+        
+          appendToFilename: ".prompt"
         - path: /path/to/another/prompts
