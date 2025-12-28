@@ -97,3 +97,94 @@ func TestBuildAdditionalJSONContent_InvalidJSONFile(t *testing.T) {
 		t.Fatal("expected error for invalid JSON")
 	}
 }
+
+func TestBuildAdditionalJSONCContent_MergesWithExisting(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "extra.jsonc")
+	// JSONC with comments
+	if err := os.WriteFile(path, []byte(`{
+  // This is a comment
+  "keep": true
+}`), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	target := config.AdditionalJSONTarget{FilePath: path, JSONPath: ".mcpServers"}
+	servers := map[string]interface{}{
+		"beta": map[string]interface{}{"command": "node"},
+	}
+
+	content, err := buildAdditionalJSONCContent(target, servers)
+	if err != nil {
+		t.Fatalf("buildAdditionalJSONCContent returned error: %v", err)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if _, ok := parsed["keep"]; !ok {
+		t.Fatal("expected existing keys to be preserved")
+	}
+	if _, ok := parsed["mcpServers"]; !ok {
+		t.Fatal("expected new node to be inserted")
+	}
+}
+
+func TestBuildAdditionalJSONCContent_RootPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "root.jsonc")
+
+	target := config.AdditionalJSONTarget{FilePath: path, JSONPath: ""}
+	servers := map[string]interface{}{
+		"delta": map[string]interface{}{"command": "npm"},
+	}
+
+	content, err := buildAdditionalJSONCContent(target, servers)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if _, ok := parsed["delta"]; !ok {
+		t.Fatal("expected root object to contain the servers map")
+	}
+}
+
+func TestBuildAdditionalJSONCContent_WithBlockComments(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "comments.jsonc")
+	// JSONC with both line and block comments
+	if err := os.WriteFile(path, []byte(`{
+  /* Block comment */
+  "existing": "value",
+  // Line comment
+  "other": 123
+}`), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	target := config.AdditionalJSONTarget{FilePath: path, JSONPath: ".servers"}
+	servers := map[string]interface{}{
+		"gamma": map[string]interface{}{"command": "python"},
+	}
+
+	content, err := buildAdditionalJSONCContent(target, servers)
+	if err != nil {
+		t.Fatalf("buildAdditionalJSONCContent returned error: %v", err)
+	}
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if _, ok := parsed["existing"]; !ok {
+		t.Fatal("expected existing keys to be preserved")
+	}
+	if _, ok := parsed["servers"]; !ok {
+		t.Fatal("expected new node to be inserted")
+	}
+}

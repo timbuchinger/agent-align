@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"agent-align/internal/config"
+	"github.com/tidwall/jsonc"
 )
 
 func buildAdditionalJSONContent(target config.AdditionalJSONTarget, servers map[string]interface{}) (string, error) {
@@ -94,4 +95,46 @@ func displayJSONPath(path string) string {
 		return trimmed
 	}
 	return "<root>"
+}
+
+func buildAdditionalJSONCContent(target config.AdditionalJSONTarget, servers map[string]interface{}) (string, error) {
+	pathSegments := jsonPathSegments(target.JSONPath)
+	if len(pathSegments) == 0 {
+		return marshalJSON(servers)
+	}
+
+	root, err := loadJSONCFile(target.FilePath)
+	if err != nil {
+		return "", err
+	}
+
+	mergeJSONValue(root, pathSegments, servers)
+	return marshalJSON(root)
+}
+
+func loadJSONCFile(path string) (map[string]interface{}, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return make(map[string]interface{}), nil
+		}
+		return nil, fmt.Errorf("failed to read %s: %w", path, err)
+	}
+
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return make(map[string]interface{}), nil
+	}
+
+	// Convert JSONC to JSON by stripping comments
+	normalized := jsonc.ToJSON(data)
+
+	var out map[string]interface{}
+	if err := json.Unmarshal(normalized, &out); err != nil {
+		return nil, fmt.Errorf("failed to parse JSONC from %s: %w", path, err)
+	}
+	if out == nil {
+		out = make(map[string]interface{})
+	}
+	return out, nil
 }

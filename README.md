@@ -164,9 +164,10 @@ the agents under `mcpServers.targets.agents`. Each entry can be either a
 string (agent name) or a mapping with a `name` plus optional destination `path`.
 Repeat an agent entry with different `path` values if you want the same format
 written to multiple destinations (for example, two Gemini installs).
-Add entries under `targets.additionalTargets.json` to mirror the MCP payload
-into other JSON files (each entry specifies `filePath` and the `jsonPath` where
-the servers belong). See `CONFIGURATION.md` for the full schema and additional
+Add entries under `targets.additionalTargets.json` or
+`targets.additionalTargets.jsonc` to mirror the MCP payload into other JSON or
+JSONC files (each entry specifies `filePath` and the `jsonPath` where the
+servers belong). See `CONFIGURATION.md` for the full schema and additional
 examples.
 
 Add the optional top-level `extraTargets` block to copy files or directories

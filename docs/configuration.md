@@ -57,6 +57,9 @@ mcpServers:
       json:
         - filePath: /path/to/additional_targets.json
           jsonPath: .mcpServers
+      jsonc:
+        - filePath: /path/to/additional_targets.jsonc
+          jsonPath: .mcpServers
 extraTargets:
   files:
     - source: /path/to/AGENTS.md
@@ -86,6 +89,11 @@ extraTargets:
       into other JSON files. Each entry must specify `filePath` and may set
       `jsonPath` (dot-separated) where the servers should be placed; omit
       `jsonPath` to replace the entire file.
+    - `additionalTargets.jsonc` (sequence, optional) – mirror the MCP payload
+      into other JSONC (JSON with Comments) files. Each entry must specify
+      `filePath` and may set `jsonPath` (dot-separated) where the servers
+      should be placed; omit `jsonPath` to replace the entire file. Comments
+      in the original file will be stripped when writing the updated content.
 - `extraTargets` (mapping, optional) – copies additional content alongside the
   MCP sync.
   - `files` (sequence) – mirror a single source file to multiple destinations.
