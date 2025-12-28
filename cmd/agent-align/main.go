@@ -80,6 +80,7 @@ func main() {
 	var cfg config.Config
 	var haveConfig bool
 	var additionalTargets []config.AdditionalJSONTarget
+	var additionalJSONCTargets []config.AdditionalJSONTarget
 	var extraTargets config.ExtraTargetsConfig
 	var targetAgents []syncer.AgentTarget
 
@@ -104,6 +105,7 @@ func main() {
 
 	if haveConfig {
 		additionalTargets = cfg.MCP.Targets.Additional.JSON
+		additionalJSONCTargets = cfg.MCP.Targets.Additional.JSONC
 		extraTargets = cfg.ExtraTargets
 		targetAgents = configTargetsToSyncer(cfg.MCP.Targets.Agents)
 		if resolvedMCPPath == "" {
@@ -134,7 +136,7 @@ func main() {
 		}
 	}
 
-	if len(targetAgents) == 0 && len(additionalTargets) == 0 && extraTargets.IsZero() {
+	if len(targetAgents) == 0 && len(additionalTargets) == 0 && len(additionalJSONCTargets) == 0 && extraTargets.IsZero() {
 		log.Fatal("no target agents, additional destinations, or extra copy targets configured; provide agents via config/flags or add extra targets")
 	}
 
@@ -189,6 +191,33 @@ func main() {
 			fmt.Printf("Additional JSON: %s\n", target.FilePath)
 			fmt.Printf("  JSON Path: %s\n", displayJSONPath(target.JSONPath))
 			content, err := buildAdditionalJSONContent(target, syncResult.Servers)
+			if err != nil {
+				fmt.Printf("  (error preparing content: %v)\n\n", err)
+				continue
+			}
+			content = strings.TrimRight(content, "\n")
+			if content == "" {
+				fmt.Println("  Content: <empty>")
+				fmt.Println()
+				continue
+			}
+			fmt.Println("  Content:")
+			lines := strings.Split(content, "\n")
+			for _, line := range lines {
+				fmt.Printf("    %s\n", line)
+			}
+			fmt.Println()
+		}
+	}
+
+	if len(additionalJSONCTargets) > 0 {
+		if len(additionalTargets) == 0 {
+			fmt.Println("Additional destinations:")
+		}
+		for _, target := range additionalJSONCTargets {
+			fmt.Printf("Additional JSONC: %s\n", target.FilePath)
+			fmt.Printf("  JSON Path: %s\n", displayJSONPath(target.JSONPath))
+			content, err := buildAdditionalJSONCContent(target, syncResult.Servers)
 			if err != nil {
 				fmt.Printf("  (error preparing content: %v)\n\n", err)
 				continue
@@ -276,6 +305,26 @@ func main() {
 			continue
 		}
 		fmt.Printf("  Updated additional JSON: %s\n", target.FilePath)
+		if target.JSONPath != "" {
+			fmt.Printf("    JSON Path: %s\n", target.JSONPath)
+		}
+	}
+
+	for _, target := range additionalJSONCTargets {
+		content, err := buildAdditionalJSONCContent(target, syncResult.Servers)
+		if err != nil {
+			msg := fmt.Sprintf("error preparing additional JSONC %s: %v", target.FilePath, err)
+			log.Print(msg)
+			applyErrors = append(applyErrors, msg)
+			continue
+		}
+		if err := writeAgentConfig(target.FilePath, content); err != nil {
+			msg := fmt.Sprintf("error writing additional JSONC %s: %v", target.FilePath, err)
+			log.Print(msg)
+			applyErrors = append(applyErrors, msg)
+			continue
+		}
+		fmt.Printf("  Updated additional JSONC: %s\n", target.FilePath)
 		if target.JSONPath != "" {
 			fmt.Printf("    JSON Path: %s\n", target.JSONPath)
 		}
