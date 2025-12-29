@@ -7,21 +7,24 @@ import (
 
 func TestGetTransformer(t *testing.T) {
 	tests := []struct {
-		name        string
-		agent       string
-		wantCopilot bool
-		wantCodex   bool
-		wantClaude  bool
-		wantGemini  bool
+		name         string
+		agent        string
+		wantCopilot  bool
+		wantCodex    bool
+		wantClaude   bool
+		wantGemini   bool
+		wantOpenCode bool
 	}{
-		{"copilot", "copilot", true, false, false, false},
-		{"copilot spaced", " copilot ", true, false, false, false},
-		{"codex", "codex", false, true, false, false},
-		{"codex spaced", " codex ", false, true, false, false},
-		{"claude", "claudecode", false, false, true, false},
-		{"gemini", "gemini", false, false, false, true},
-		{"gemini spaced", " gemini ", false, false, false, true},
-		{"default", "vscode", false, false, false, false},
+		{"copilot", "copilot", true, false, false, false, false},
+		{"copilot spaced", " copilot ", true, false, false, false, false},
+		{"codex", "codex", false, true, false, false, false},
+		{"codex spaced", " codex ", false, true, false, false, false},
+		{"claude", "claudecode", false, false, true, false, false},
+		{"gemini", "gemini", false, false, false, true, false},
+		{"gemini spaced", " gemini ", false, false, false, true, false},
+		{"opencode", "opencode", false, false, false, false, true},
+		{"opencode spaced", " opencode ", false, false, false, false, true},
+		{"default", "vscode", false, false, false, false, false},
 	}
 
 	for _, tt := range tests {
@@ -31,6 +34,7 @@ func TestGetTransformer(t *testing.T) {
 			_, isCodex := got.(*CodexTransformer)
 			_, isClaude := got.(*ClaudeTransformer)
 			_, isGemini := got.(*GeminiTransformer)
+			_, isOpenCode := got.(*OpenCodeTransformer)
 
 			if isCopilot != tt.wantCopilot {
 				t.Fatalf("expected copilot=%v, got %v", tt.wantCopilot, isCopilot)
@@ -43,6 +47,9 @@ func TestGetTransformer(t *testing.T) {
 			}
 			if isGemini != tt.wantGemini {
 				t.Fatalf("expected gemini=%v, got %v", tt.wantGemini, isGemini)
+			}
+			if isOpenCode != tt.wantOpenCode {
+				t.Fatalf("expected opencode=%v, got %v", tt.wantOpenCode, isOpenCode)
 			}
 		})
 	}
@@ -297,6 +304,185 @@ func TestGeminiTransformer_NonMapServer(t *testing.T) {
 	validServer := servers["valid"].(map[string]interface{})
 	if _, exists := validServer["autoApprove"]; exists {
 		t.Error("autoApprove should be removed from valid server")
+	}
+
+	// Invalid server should remain unchanged (string)
+	if servers["invalid"] != "not-a-map" {
+		t.Error("non-map server should remain unchanged")
+	}
+}
+
+func TestOpenCodeTransformer_CommandArrayConversion(t *testing.T) {
+	transformer := &OpenCodeTransformer{}
+	servers := map[string]interface{}{
+		"with-args": map[string]interface{}{
+			"command": "npx",
+			"args":    []interface{}{"-y", "some-mcp-server"},
+		},
+		"without-args": map[string]interface{}{
+			"command": "uvx",
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check server with args - command should be array, args should be removed
+	serverWithArgs := servers["with-args"].(map[string]interface{})
+	cmdArray, ok := serverWithArgs["command"].([]interface{})
+	if !ok {
+		t.Fatalf("command should be array, got %T", serverWithArgs["command"])
+	}
+	if len(cmdArray) != 3 {
+		t.Fatalf("expected 3 elements in command array, got %d", len(cmdArray))
+	}
+	if cmdArray[0] != "npx" || cmdArray[1] != "-y" || cmdArray[2] != "some-mcp-server" {
+		t.Errorf("unexpected command array: %v", cmdArray)
+	}
+	if _, exists := serverWithArgs["args"]; exists {
+		t.Error("args should be removed after conversion")
+	}
+
+	// Check server without args - command should still be array
+	serverWithoutArgs := servers["without-args"].(map[string]interface{})
+	cmdArray2, ok := serverWithoutArgs["command"].([]interface{})
+	if !ok {
+		t.Fatalf("command should be array, got %T", serverWithoutArgs["command"])
+	}
+	if len(cmdArray2) != 1 || cmdArray2[0] != "uvx" {
+		t.Errorf("unexpected command array: %v", cmdArray2)
+	}
+}
+
+func TestOpenCodeTransformer_EnvironmentRename(t *testing.T) {
+	transformer := &OpenCodeTransformer{}
+	servers := map[string]interface{}{
+		"server": map[string]interface{}{
+			"command": "npx",
+			"env": map[string]interface{}{
+				"API_KEY": "test-key",
+				"DEBUG":   "true",
+			},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	server := servers["server"].(map[string]interface{})
+	if _, exists := server["env"]; exists {
+		t.Error("env should be removed")
+	}
+	
+	environment, exists := server["environment"]
+	if !exists {
+		t.Fatal("environment should exist")
+	}
+	
+	envMap, ok := environment.(map[string]interface{})
+	if !ok {
+		t.Fatalf("environment should be a map, got %T", environment)
+	}
+	if envMap["API_KEY"] != "test-key" {
+		t.Error("API_KEY should be preserved in environment")
+	}
+	if envMap["DEBUG"] != "true" {
+		t.Error("DEBUG should be preserved in environment")
+	}
+}
+
+func TestOpenCodeTransformer_TypeNormalization(t *testing.T) {
+	transformer := &OpenCodeTransformer{}
+	servers := map[string]interface{}{
+		"stdio-server": map[string]interface{}{
+			"type":    "stdio",
+			"command": "node",
+		},
+		"http-server": map[string]interface{}{
+			"type": "http",
+			"url":  "https://example.com",
+		},
+		"streamable-http-server": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "https://example.com",
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if servers["stdio-server"].(map[string]interface{})["type"] != "local" {
+		t.Error("stdio should be converted to local")
+	}
+	if servers["http-server"].(map[string]interface{})["type"] != "remote" {
+		t.Error("http should be converted to remote")
+	}
+	if servers["streamable-http-server"].(map[string]interface{})["type"] != "remote" {
+		t.Error("streamable-http should be converted to remote")
+	}
+}
+
+func TestOpenCodeTransformer_RemovesUnsupportedFields(t *testing.T) {
+	transformer := &OpenCodeTransformer{}
+	servers := map[string]interface{}{
+		"server": map[string]interface{}{
+			"command":     "npx",
+			"autoApprove": []interface{}{},
+			"disabled":    false,
+			"gallery":     true,
+			"tools":       []interface{}{"tool1"},
+			"env": map[string]interface{}{
+				"KEY": "value",
+			},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	server := servers["server"].(map[string]interface{})
+	
+	if _, exists := server["autoApprove"]; exists {
+		t.Error("autoApprove should be removed")
+	}
+	if _, exists := server["disabled"]; exists {
+		t.Error("disabled should be removed")
+	}
+	if _, exists := server["gallery"]; exists {
+		t.Error("gallery should be removed")
+	}
+	if _, exists := server["tools"]; exists {
+		t.Error("tools should be removed")
+	}
+	
+	// env should be renamed to environment, not removed
+	if _, exists := server["environment"]; !exists {
+		t.Error("environment should exist (renamed from env)")
+	}
+}
+
+func TestOpenCodeTransformer_NonMapServer(t *testing.T) {
+	transformer := &OpenCodeTransformer{}
+	servers := map[string]interface{}{
+		"invalid": "not-a-map",
+		"valid": map[string]interface{}{
+			"command": "npx",
+			"args":    []interface{}{"-y", "tool"},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Valid server should have command converted to array
+	validServer := servers["valid"].(map[string]interface{})
+	if _, ok := validServer["command"].([]interface{}); !ok {
+		t.Error("command should be converted to array")
 	}
 
 	// Invalid server should remain unchanged (string)

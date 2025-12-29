@@ -35,7 +35,7 @@ type AgentResult struct {
 	Content string
 }
 
-var supportedAgentList = []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode"}
+var supportedAgentList = []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode", "opencode"}
 
 // SupportedAgents returns a list of supported agent names.
 func SupportedAgents() []string {
@@ -98,6 +98,13 @@ func GetAgentConfig(agent, overridePath string) (AgentConfig, error) {
 			FilePath: applyOverride(overridePath, defaultPath),
 			NodeName: "mcpServers",
 			Format:   "json",
+		}, nil
+	case "opencode":
+		return AgentConfig{
+			Name:     name,
+			FilePath: applyOverride(overridePath, filepath.Join(homeDir, ".config", "opencode", "opencode.jsonc")),
+			NodeName: "mcp",
+			Format:   "jsonc",
 		}, nil
 	default:
 		return AgentConfig{}, fmt.Errorf("unsupported agent: %s", agent)
@@ -189,6 +196,10 @@ func formatConfig(config AgentConfig, servers map[string]interface{}) string {
 	if config.Format == "toml" {
 		return formatCodexConfig(config, servers)
 	}
+	
+	if config.Format == "jsonc" {
+		return formatJSONCConfig(config, servers)
+	}
 
 	switch config.Name {
 	case "gemini":
@@ -265,6 +276,16 @@ func formatJSONConfig(cfg AgentConfig, servers map[string]interface{}) string {
 		return ""
 	}
 	return string(data)
+}
+
+// formatJSONCConfig formats servers as JSONC (JSON with Comments).
+// JSONC is essentially JSON but allows for comments. For now, we output
+// standard JSON without comments since the format is compatible.
+func formatJSONCConfig(cfg AgentConfig, servers map[string]interface{}) string {
+	// JSONC files can contain comments, but we'll use the same logic as JSON
+	// since we're generating the config programmatically without comments.
+	// The key difference is the file extension and that parsers must support comments.
+	return formatJSONConfig(cfg, servers)
 }
 
 // formatToTOML converts servers to Codex TOML format

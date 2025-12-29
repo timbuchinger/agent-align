@@ -25,6 +25,8 @@ func GetTransformer(agent string) Transformer {
 		return &CodexTransformer{}
 	case "gemini":
 		return &GeminiTransformer{}
+	case "opencode":
+		return &OpenCodeTransformer{}
 	default:
 		return &NoOpTransformer{}
 	}
@@ -213,6 +215,60 @@ func (t *GeminiTransformer) Transform(servers map[string]interface{}) error {
 		delete(server, "disabled")
 		delete(server, "gallery")
 		delete(server, "type")
+	}
+	return nil
+}
+
+// OpenCodeTransformer converts MCP server configurations to OpenCode's format.
+// OpenCode expects:
+// - "command" as an array (combining command + args)
+// - "env" renamed to "environment"
+// - "type" field with values: "local" (for stdio) or "remote" (for http)
+type OpenCodeTransformer struct{}
+
+// Transform applies OpenCode-specific conversions to all server configurations.
+func (t *OpenCodeTransformer) Transform(servers map[string]interface{}) error {
+	for _, serverRaw := range servers {
+		server, ok := serverRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Convert command + args to command array
+		if cmd, hasCmd := server["command"].(string); hasCmd {
+			var cmdArray []interface{}
+			cmdArray = append(cmdArray, cmd)
+			
+			if args, hasArgs := server["args"].([]interface{}); hasArgs {
+				cmdArray = append(cmdArray, args...)
+				delete(server, "args")
+			}
+			
+			server["command"] = cmdArray
+		}
+
+		// Rename "env" to "environment"
+		if env, hasEnv := server["env"]; hasEnv {
+			server["environment"] = env
+			delete(server, "env")
+		}
+
+		// Normalize type field: stdio -> local, streamable-http/http -> remote
+		if typ, ok := server["type"].(string); ok {
+			normalized := strings.ToLower(strings.TrimSpace(typ))
+			switch normalized {
+			case "stdio":
+				server["type"] = "local"
+			case "streamable-http", "http":
+				server["type"] = "remote"
+			}
+		}
+
+		// Remove fields that OpenCode doesn't use
+		delete(server, "autoApprove")
+		delete(server, "disabled")
+		delete(server, "gallery")
+		delete(server, "tools")
 	}
 	return nil
 }

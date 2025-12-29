@@ -80,7 +80,7 @@ func TestSyncerSync(t *testing.T) {
 
 func TestSupportedAgents(t *testing.T) {
 	agents := SupportedAgents()
-	expected := []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode"}
+	expected := []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode", "opencode"}
 	if len(agents) != len(expected) {
 		t.Fatalf("expected %d agents, got %d", len(expected), len(agents))
 	}
@@ -318,5 +318,149 @@ func TestSyncGeminiRemovesUnsupportedFields(t *testing.T) {
 	}
 	if server2["env"] == nil {
 		t.Error("env should be preserved in server2")
+	}
+}
+
+func TestSyncOpenCodeTransformsServers(t *testing.T) {
+	targets := []AgentTarget{
+		{Name: "opencode"},
+	}
+	servers := map[string]interface{}{
+		"server1": map[string]interface{}{
+			"command": "npx",
+			"args":    []interface{}{"-y", "some-mcp-server"},
+			"env": map[string]interface{}{
+				"API_KEY": "test-key",
+			},
+			"type": "stdio",
+		},
+		"server2": map[string]interface{}{
+			"type": "http",
+			"url":  "https://example.com",
+		},
+	}
+
+	s := New(targets)
+	result, err := s.Sync(servers)
+	if err != nil {
+		t.Fatalf("Sync returned error: %v", err)
+	}
+
+	opencode := result.Agents["opencode"][0]
+	var opencodeData map[string]interface{}
+	if err := json.Unmarshal([]byte(opencode.Content), &opencodeData); err != nil {
+		t.Fatalf("opencode output not valid JSON: %v", err)
+	}
+
+	// Check that the node name is "mcp" not "mcpServers"
+	mcp, ok := opencodeData["mcp"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mcp key missing in output, got keys: %v", opencodeData)
+	}
+
+	// Verify server1 transformations
+	server1, ok := mcp["server1"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("server1 missing in mcp")
+	}
+
+	// Command should be an array
+	cmd, ok := server1["command"].([]interface{})
+	if !ok {
+		t.Fatalf("command should be array, got %T", server1["command"])
+	}
+	if len(cmd) != 3 || cmd[0] != "npx" || cmd[1] != "-y" || cmd[2] != "some-mcp-server" {
+		t.Errorf("unexpected command array: %v", cmd)
+	}
+
+	// args should be removed
+	if _, exists := server1["args"]; exists {
+		t.Error("args should be removed")
+	}
+
+	// env should be renamed to environment
+	if _, exists := server1["env"]; exists {
+		t.Error("env should be removed")
+	}
+	if _, exists := server1["environment"]; !exists {
+		t.Error("environment should exist")
+	}
+
+	// type should be "local"
+	if server1["type"] != "local" {
+		t.Errorf("type should be 'local', got %v", server1["type"])
+	}
+
+	// Verify server2 transformations
+	server2, ok := mcp["server2"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("server2 missing in mcp")
+	}
+
+	// type should be "remote"
+	if server2["type"] != "remote" {
+		t.Errorf("type should be 'remote', got %v", server2["type"])
+	}
+
+	// url should be preserved
+	if server2["url"] != "https://example.com" {
+		t.Error("url should be preserved")
+	}
+}
+
+func TestFormatOpenCodeConfigPreservesExistingSettings(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "opencode.jsonc")
+	existing := `{
+  "theme": "dark",
+  "editor": {
+    "fontSize": 14
+  },
+  "mcp": {
+    "old-server": {
+      "command": ["node", "old.js"]
+    }
+  }
+}`
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatalf("failed to write existing config: %v", err)
+	}
+
+	servers := map[string]interface{}{
+		"new-server": map[string]interface{}{
+			"command": []interface{}{"npx", "-y", "tool"},
+		},
+	}
+	cfg := AgentConfig{Name: "opencode", FilePath: path, NodeName: "mcp", Format: "jsonc"}
+	result := formatConfig(cfg, servers)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("result not valid JSON: %v", err)
+	}
+
+	// Theme should be preserved
+	if parsed["theme"] != "dark" {
+		t.Fatalf("theme should be preserved, got %v", parsed["theme"])
+	}
+
+	// Editor settings should be preserved
+	editor, ok := parsed["editor"].(map[string]interface{})
+	if !ok || editor["fontSize"] != float64(14) {
+		t.Fatalf("editor settings should be preserved, got %v", parsed["editor"])
+	}
+
+	// mcp node should have new server
+	mcp, ok := parsed["mcp"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mcp missing in output: %v", parsed)
+	}
+	if _, ok := mcp["new-server"]; !ok {
+		t.Fatal("new-server should be present in mcp block")
+	}
+
+	// Old server should be replaced
+	if _, ok := mcp["old-server"]; ok {
+		t.Fatal("old-server should have been replaced")
 	}
 }
