@@ -278,6 +278,44 @@ func TestCopyExtraDirectoryTargetMultipleExcludeGlobs(t *testing.T) {
 	}
 }
 
+func TestCopyExtraDirectoryAppendToFilename(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "src")
+	if err := os.MkdirAll(filepath.Join(source, "nested"), 0o755); err != nil {
+		t.Fatalf("failed to create source tree: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "plan.md"), []byte("plan"), 0o644); err != nil {
+		t.Fatalf("failed to write plan.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "nested", "notes"), []byte("notes"), 0o644); err != nil {
+		t.Fatalf("failed to write notes: %v", err)
+	}
+
+	dest := filepath.Join(dir, "dest")
+	target := config.ExtraDirectoryTarget{
+		Source: source,
+		Destinations: []config.ExtraDirectoryCopyRoute{
+			{Path: dest, AppendToFilename: ".prompt"},
+		},
+	}
+	count, err := copyExtraDirectoryTarget(target)
+	if err != nil {
+		t.Fatalf("copyExtraDirectoryTarget returned error: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 files copied, got %d", count)
+	}
+
+	// Expect plan.md -> plan.prompt.md
+	if _, err := os.Stat(filepath.Join(dest, "plan.prompt.md")); err != nil {
+		t.Fatalf("expected plan.prompt.md to exist: %v", err)
+	}
+	// Expect nested/notes -> nested/notes.prompt (no extension)
+	if _, err := os.Stat(filepath.Join(dest, "nested", "notes.prompt")); err != nil {
+		t.Fatalf("expected nested/notes.prompt to exist: %v", err)
+	}
+}
+
 func TestCopyExtraFileTargetWithSkills(t *testing.T) {
 	dir := t.TempDir()
 

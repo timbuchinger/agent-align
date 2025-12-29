@@ -3,5 +3,6 @@ npm-debug.log
 .DS_Store
 coverage.out
 *.exe
+agent-align
 config.yml
 agent-align-mcp.yml

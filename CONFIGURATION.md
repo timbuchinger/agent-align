@@ -96,6 +96,9 @@ mcpServers:
       json:
         - filePath: /path/to/additional_targets.json
           jsonPath: .mcpServers
+      jsonc:
+        - filePath: /path/to/additional_targets.jsonc
+          jsonPath: .mcpServers
 extraTargets:
   files:
     - source: /path/to/AGENTS.md
@@ -131,6 +134,11 @@ extraTargets:
       into other JSON files. Each entry must specify `filePath` and may set
       `jsonPath` (dot-separated) where the servers should be placed; omit
       `jsonPath` to replace the entire file.
+    - `additionalTargets.jsonc` (sequence, optional) – mirror the MCP payload
+      into other JSONC (JSON with Comments) files. Each entry must specify
+      `filePath` and may set `jsonPath` (dot-separated) where the servers
+      should be placed; omit `jsonPath` to replace the entire file. Comments
+      in the original file will be stripped when writing the updated content.
 - `extraTargets` (mapping, optional) – copies additional content alongside the
   MCP sync.
   - `files` (sequence) – mirror a single source file to multiple destinations.
@@ -138,7 +146,7 @@ extraTargets:
     Each destination may be provided as a plain string (the destination path)
     or as a mapping with additional options:
     - `path` (string, required) – destination file path.
-    - `frontmatterTemplate` (string, optional) – path to a file whose contents
+    - `frontmatterPath` (string, optional) – path to a file whose contents
       will be written as frontmatter/template block to the destination before
       any skills content is appended. Useful for copying prompt files that
       need YAML frontmatter or a fixed header.
@@ -148,12 +156,19 @@ extraTargets:
       - `ignoredSkills` (sequence, optional) – skill names to exclude.
     - `pathToSkills` (string, optional) – deprecated, use `appendSkills`
       instead. Single directory path for appending skills.
+    - `appendToFilename` (string, optional) – string to insert before the
+      destination filename's extension. Example: with `.prompt`, `plan.md` ->
+      `plan.prompt.md`. If the source file has no extension the value is
+      appended to the end of the filename.
   - `directories` (sequence) – copy every file within `source` to each entry in
     `destinations`. Every destination entry must specify a `path` and may set
     `excludeGlobs` (sequence of glob patterns) to skip matching files, and/or
     `flatten: true` to drop the source directory structure while copying.
     Glob patterns support `**` for recursive matching (e.g., `dir/**` excludes
     all files under `dir/`, `*.log` excludes all log files).
+    - `appendToFilename` (string, optional) – insert the given string before
+      each copied file's extension. Useful for adding agent-specific suffixes
+      like `.prompt` so `plan.md` becomes `plan.prompt.md`.
 
 ## Supported Agents and defaults
 

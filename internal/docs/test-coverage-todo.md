@@ -14,8 +14,9 @@
 2. **Cover the interactive helpers** – supply synthetic readers for
    `promptTargetAgents`. Assert invalid-input loops stay aligned with the
    expectations.
-3. **Test file operations** – verify `writeConfigFile` (and `ensureConfigFile`) creates
-   directories/files correctly and surfaces helpful errors when writes fail.
+3. **Test file operations** – verify `writeConfigFile` (and `ensureConfigFile`)
+   creates directories/files correctly and surfaces helpful errors when writes
+   fail.
 4. **Signal incremental progress** – rerun `go test ./...` after each earlier step.
    This keeps the suite green before moving to the next item.
 

@@ -44,9 +44,9 @@ Override the path with `-config <path>`. Within that file, define an
 agents to update. Each agent entry can optionally set `path` to override the
 default location for that tool, and you can repeat an agent with different
 paths to write the same format to multiple destinations. Add entries under
-`targets.additionalTargets.json` to mirror the MCP payload into other JSON files
-(each entry specifies `filePath` and the `jsonPath` where the servers belong).
-See the
+`targets.additionalTargets.json` or `targets.additionalTargets.jsonc` to mirror
+the MCP payload into other JSON or JSONC files (each entry specifies `filePath`
+and the `jsonPath` where the servers belong). See the
 [Configuration Guide](configuration.md) for the schema and examples. The MCP
 servers themselves live in a separate YAML file, and the CLI applies
 agent-specific transformations when writing each target.

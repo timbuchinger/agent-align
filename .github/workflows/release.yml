@@ -99,6 +99,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
@@ -119,17 +120,18 @@ jobs:
           mkdir -p dist
           for target in "${TARGETS[@]}"; do
             IFS=' ' read -r os arch <<< "$target"
-            bin="agent-align-${os}-${arch}"
+            out_bin="agent-align"
             if [ "$os" = windows ]; then
-              bin="${bin}.exe"
+              out_bin="${out_bin}.exe"
             fi
-            env GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o "dist/$bin" ./cmd/agent-align
+            archive="agent-align-${os}-${arch}"
+            env GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o "dist/$out_bin" ./cmd/agent-align
             if [ "$os" = windows ]; then
-              zip -j "dist/${bin}.zip" "dist/$bin"
-              rm "dist/$bin"
+              zip -j "dist/${archive}.zip" "dist/$out_bin"
+              rm "dist/$out_bin"
             else
-              tar -czf "dist/${bin}.tar.gz" -C dist "$bin"
-              rm "dist/$bin"
+              tar -czf "dist/${archive}.tar.gz" -C dist "$out_bin"
+              rm "dist/$out_bin"
             fi
           done
       - name: Setup Node
@@ -143,52 +145,84 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: npx semantic-release
-      - name: Update Homebrew formula
+
+      - id: update_shas
+        name: Update Homebrew Tap
+        if: always()
         env:
-          VERSION: ${{ needs.verify.outputs.release_version }}
-        run: ./scripts/update-brew-formula.sh "$VERSION" dist
-      - name: Push Homebrew formula to tap
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          if [ -z "$HOMEBREW_TAP_TOKEN" ] || [ -z "$HOMEBREW_TAP_REPO" ]; then
-            echo "HOMEBREW_TAP_TOKEN or HOMEBREW_TAP_REPO not set, skipping Homebrew tap update"
-            exit 0
+          set -euo pipefail
+          # Determine version (strip leading v if present)
+          VERSION='${{ needs.verify.outputs.release_version }}'
+          if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ]; then
+            VERSION=$(git describe --tags --abbrev=0 || true)
           fi
-          
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Clone the homebrew tap repository
-          TEMP_DIR=$(mktemp -d)
-          
-          # Configure git credentials to avoid token exposure in URLs
-          git config --global credential.helper store
-          echo "https://github-actions:${HOMEBREW_TAP_TOKEN}@github.com" > ~/.git-credentials
-          
-          git clone "https://github.com/${HOMEBREW_TAP_REPO}.git" "$TEMP_DIR"
-          
-          # Detect the default branch
-          cd "$TEMP_DIR"
-          DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
-          cd -
-          
-          # Copy the updated formula
-          mkdir -p "$TEMP_DIR/Formula"
-          cp Formula/agent-align.rb "$TEMP_DIR/Formula/agent-align.rb"
-          
-          # Commit and push
-          cd "$TEMP_DIR"
-          git add Formula/agent-align.rb
-          if git diff --staged --quiet; then
-            echo "No changes to Homebrew formula"
+          VER=${VERSION#v}
+
+          echo "Updating Homebrew tap for version: $VER"
+
+          assets=(
+            "agent-align-darwin-arm64.tar.gz"
+            "agent-align-darwin-amd64.tar.gz"
+            "agent-align-linux-amd64.tar.gz"
+            "agent-align-linux-arm64.tar.gz"
+          )
+
+          declare -A shas
+
+          for a in "${assets[@]}"; do
+            url="https://github.com/timbuchinger/agent-align/releases/download/v${VER}/${a}"
+            echo "Fetching $url"
+            sha=$(curl -sL "$url" | shasum -a 256 | cut -d' ' -f1)
+            if [ -z "$sha" ]; then
+              echo "WARNING: could not fetch $url or compute sha256"
+            fi
+            shas[$a]=$sha
+            echo "$a -> ${shas[$a]}"
+          done
+
+          # Expose SHAs and VER as step outputs so subsequent steps can access them
+          echo "DARWIN_ARM_SHA=${shas[agent-align-darwin-arm64.tar.gz]}" >> "$GITHUB_OUTPUT"
+          echo "DARWIN_AMD_SHA=${shas[agent-align-darwin-amd64.tar.gz]}" >> "$GITHUB_OUTPUT"
+          echo "LINUX_AMD_SHA=${shas[agent-align-linux-amd64.tar.gz]}" >> "$GITHUB_OUTPUT"
+          echo "LINUX_ARM_SHA=${shas[agent-align-linux-arm64.tar.gz]}" >> "$GITHUB_OUTPUT"
+          echo "VER=${VER}" >> "$GITHUB_OUTPUT"
+
+          # Clone tap and update formula file
+          # Use official ssh-agent action to load the private key securely
+          # This expects `secrets.TAP_REPO_SSH_KEY` to contain the private key
+          echo "Setting up SSH agent via action"
+      - name: Setup SSH key for Homebrew tap
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.TAP_REPO_SSH_KEY }}
+
+      - name: Clone Homebrew tap
+        env:
+          DARWIN_ARM_SHA: ${{ steps.update_shas.outputs.DARWIN_ARM_SHA }}
+          DARWIN_AMD_SHA: ${{ steps.update_shas.outputs.DARWIN_AMD_SHA }}
+          LINUX_AMD_SHA: ${{ steps.update_shas.outputs.LINUX_AMD_SHA }}
+          LINUX_ARM_SHA: ${{ steps.update_shas.outputs.LINUX_ARM_SHA }}
+          VER: ${{ steps.update_shas.outputs.VER }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git clone git@github.com:timbuchinger/homebrew-tap.git
+          cd homebrew-tap
+
+          # Generate the formula file from the template using the generator script.
+          # The template lives in ../homebrew-tap/Formula/agent-align.rb.erb
+          # and the generator script lives in scripts/generate_formula.rb
+          echo "Generating Formula file from template"
+          ruby ../scripts/generate_formula.rb
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Formula/agent-align.rb || true
+          if git diff --cached --quiet; then
+            echo "No changes to formula"
           else
-            git commit -m "chore: update agent-align to version ${VERSION}"
-            git push origin "$DEFAULT_BRANCH"
+            git commit -m "Update agent-align to v${VER}"
+            git push
           fi
-          
-          # Clean up credentials
-          rm -f ~/.git-credentials
-          git config --global --unset credential.helper
-          rm -rf "$TEMP_DIR"

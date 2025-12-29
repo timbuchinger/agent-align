@@ -37,7 +37,8 @@ type AgentTarget struct {
 
 // AdditionalTargets lists paths for JSON-style destinations.
 type AdditionalTargets struct {
-	JSON []AdditionalJSONTarget `yaml:"json"`
+	JSON  []AdditionalJSONTarget `yaml:"json"`
+	JSONC []AdditionalJSONTarget `yaml:"jsonc"`
 }
 
 // ExtraTargetsConfig describes file/directory copy operations outside the MCP sync.
@@ -64,6 +65,7 @@ type ExtraFileCopyRoute struct {
 	PathToSkills    string        `yaml:"pathToSkills,omitempty"` // Deprecated: use AppendSkills
 	AppendSkills    []AppendSkill `yaml:"appendSkills,omitempty"`
 	FrontmatterPath string        `yaml:"frontmatterPath,omitempty"`
+	AppendToFilename string       `yaml:"appendToFilename,omitempty"`
 }
 
 // ExtraDirectoryTarget copies an entire directory, optionally flattening the files.
@@ -77,6 +79,7 @@ type ExtraDirectoryCopyRoute struct {
 	Path         string   `yaml:"path"`
 	ExcludeGlobs []string `yaml:"excludeGlobs,omitempty"`
 	Flatten      bool     `yaml:"flatten"`
+	AppendToFilename string `yaml:"appendToFilename,omitempty"`
 }
 
 // AdditionalJSONTarget describes a JSON file that should receive the MCP payload.
@@ -174,7 +177,7 @@ func (t *TargetsConfig) UnmarshalYAML(node *yaml.Node) error {
 			return err
 		}
 		t.Agents = r.Agents
-		if len(r.AdditionalTargets.JSON) > 0 {
+		if len(r.AdditionalTargets.JSON) > 0 || len(r.AdditionalTargets.JSONC) > 0 {
 			t.Additional = r.AdditionalTargets
 		} else {
 			t.Additional = r.Additional
@@ -219,6 +222,19 @@ func Load(path string) (Config, error) {
 			return Config{}, fmt.Errorf("config at %q has an additional JSON target with invalid filePath %q: %w", path, cfg.MCP.Targets.Additional.JSON[i].FilePath, err)
 		}
 		cfg.MCP.Targets.Additional.JSON[i].FilePath = expanded
+	}
+
+	for i := range cfg.MCP.Targets.Additional.JSONC {
+		cfg.MCP.Targets.Additional.JSONC[i].FilePath = strings.TrimSpace(cfg.MCP.Targets.Additional.JSONC[i].FilePath)
+		cfg.MCP.Targets.Additional.JSONC[i].JSONPath = strings.TrimSpace(cfg.MCP.Targets.Additional.JSONC[i].JSONPath)
+		if cfg.MCP.Targets.Additional.JSONC[i].FilePath == "" {
+			return Config{}, fmt.Errorf("config at %q has an additional JSONC target without a filePath", path)
+		}
+		expanded, err := expandUserPath(cfg.MCP.Targets.Additional.JSONC[i].FilePath)
+		if err != nil {
+			return Config{}, fmt.Errorf("config at %q has an additional JSONC target with invalid filePath %q: %w", path, cfg.MCP.Targets.Additional.JSONC[i].FilePath, err)
+		}
+		cfg.MCP.Targets.Additional.JSONC[i].FilePath = expanded
 	}
 
 	for i := range cfg.ExtraTargets.Files {
@@ -289,11 +305,15 @@ func Load(path string) (Config, error) {
 				}
 			}
 
+			// Handle AppendToFilename (no path expansion)
+			trimmedAppend := strings.TrimSpace(dest.AppendToFilename)
+
 			routes = append(routes, ExtraFileCopyRoute{
 				Path:            expandedPath,
 				PathToSkills:    expandedSkills,
 				AppendSkills:    expandedAppendSkills,
 				FrontmatterPath: expandedFrontmatter,
+				AppendToFilename: trimmedAppend,
 			})
 		}
 		if len(routes) == 0 {
@@ -331,10 +351,14 @@ func Load(path string) (Config, error) {
 				}
 				excludeGlobs = append(excludeGlobs, trimmedGlob)
 			}
+
+			// Handle AppendToFilename (no path expansion)
+			trimmedAppend := strings.TrimSpace(dest.AppendToFilename)
 			routes = append(routes, ExtraDirectoryCopyRoute{
 				Path:         expandedPath,
 				ExcludeGlobs: excludeGlobs,
 				Flatten:      dest.Flatten,
+				AppendToFilename: trimmedAppend,
 			})
 		}
 		if len(routes) == 0 {
@@ -345,6 +369,7 @@ func Load(path string) (Config, error) {
 
 	if len(cfg.MCP.Targets.Agents) == 0 &&
 		len(cfg.MCP.Targets.Additional.JSON) == 0 &&
+		len(cfg.MCP.Targets.Additional.JSONC) == 0 &&
 		cfg.ExtraTargets.IsZero() {
 		return Config{}, fmt.Errorf("config at %q must define at least one target", path)
 	}
@@ -426,5 +451,5 @@ func (e ExtraTargetsConfig) IsZero() bool {
 
 // IsZero reports whether additional JSON targets are configured.
 func (a AdditionalTargets) IsZero() bool {
-	return len(a.JSON) == 0
+	return len(a.JSON) == 0 && len(a.JSONC) == 0
 }

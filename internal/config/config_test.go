@@ -87,6 +87,56 @@ func TestLoadRejectsInvalidAdditionalTarget(t *testing.T) {
 	}
 }
 
+func TestLoadWithJSONCTargets(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+
+	content := `mcpServers:
+  configPath: ~/agent-align-mcp.yml
+  targets:
+    agents:
+      - copilot
+    additionalTargets:
+      jsonc:
+        - filePath: ~/extra.jsonc
+          jsonPath: .mcpServers
+`
+
+	path := writeConfigFile(t, content)
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if len(got.MCP.Targets.Additional.JSONC) != 1 {
+		t.Fatalf("expected 1 JSONC target, got %d", len(got.MCP.Targets.Additional.JSONC))
+	}
+	if got.MCP.Targets.Additional.JSONC[0].FilePath != filepath.Join(dir, "extra.jsonc") {
+		t.Fatalf("JSONC filePath not expanded, got %s", got.MCP.Targets.Additional.JSONC[0].FilePath)
+	}
+	if got.MCP.Targets.Additional.JSONC[0].JSONPath != ".mcpServers" {
+		t.Fatalf("unexpected JSONPath: %s", got.MCP.Targets.Additional.JSONC[0].JSONPath)
+	}
+}
+
+func TestLoadRejectsInvalidJSONCTarget(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents: [copilot]
+    additionalTargets:
+      jsonc:
+        - filePath: ""
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for missing JSONC filePath")
+	}
+	if !strings.Contains(err.Error(), "JSONC target without a filePath") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestLoadExtraFileTargetsBackwardCompatibility(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
