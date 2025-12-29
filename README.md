@@ -70,12 +70,13 @@ go build ./cmd/agent-align
    mcpServers:
      targets:
        agents:
-         - copilot
-         - vscode
-         - codex
-         - kilocode
          - claudecode
+         - copilot
+         - codex
          - gemini
+         - kilocode
+         - opencode
+         - vscode
    ```
 
    You can also run `agent-align init -config /path/to/agent-align.yml` to walk
