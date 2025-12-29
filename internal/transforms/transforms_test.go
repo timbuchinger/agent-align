@@ -375,12 +375,12 @@ func TestOpenCodeTransformer_EnvironmentRename(t *testing.T) {
 	if _, exists := server["env"]; exists {
 		t.Error("env should be removed")
 	}
-	
+
 	environment, exists := server["environment"]
 	if !exists {
 		t.Fatal("environment should exist")
 	}
-	
+
 	envMap, ok := environment.(map[string]interface{})
 	if !ok {
 		t.Fatalf("environment should be a map, got %T", environment)

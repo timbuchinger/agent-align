@@ -196,7 +196,7 @@ func formatConfig(config AgentConfig, servers map[string]interface{}) string {
 	if config.Format == "toml" {
 		return formatCodexConfig(config, servers)
 	}
-	
+
 	if config.Format == "jsonc" {
 		return formatJSONCConfig(config, servers)
 	}
