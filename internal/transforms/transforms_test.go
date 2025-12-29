@@ -539,3 +539,29 @@ func TestOpenCodeTransformer_AddsTypeWhenMissing(t *testing.T) {
 		t.Errorf("docker-command server should have type 'local', got %v", dockerServer["type"])
 	}
 }
+
+func TestOpenCodeTransformer_AddsTypeForEdgeCases(t *testing.T) {
+	transformer := &OpenCodeTransformer{}
+	servers := map[string]interface{}{
+		"no-command-or-url": map[string]interface{}{
+			"someOtherField": "value",
+		},
+		"empty-server": map[string]interface{}{},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Server with neither command nor url should default to "local"
+	edgeCaseServer := servers["no-command-or-url"].(map[string]interface{})
+	if edgeCaseServer["type"] != "local" {
+		t.Errorf("server with no command or url should default to type 'local', got %v", edgeCaseServer["type"])
+	}
+
+	// Empty server should also default to "local"
+	emptyServer := servers["empty-server"].(map[string]interface{})
+	if emptyServer["type"] != "local" {
+		t.Errorf("empty server should default to type 'local', got %v", emptyServer["type"])
+	}
+}

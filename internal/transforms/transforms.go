@@ -266,10 +266,11 @@ func (t *OpenCodeTransformer) Transform(servers map[string]interface{}) error {
 			}
 		} else {
 			// Add type field when missing based on server configuration
-			// If server has a url, it's a remote server; otherwise it's local
+			// If server has a url, it's a remote server; otherwise it's local (command-based)
 			if _, hasURL := server["url"]; hasURL {
 				server["type"] = "remote"
-			} else if _, hasCommand := server["command"]; hasCommand {
+			} else {
+				// Default to local for command-based servers and edge cases
 				server["type"] = "local"
 			}
 		}
