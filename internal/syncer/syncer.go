@@ -281,6 +281,7 @@ func formatJSONConfig(cfg AgentConfig, servers map[string]interface{}) string {
 // formatJSONCConfig formats servers as JSONC (JSON with Comments).
 // JSONC is essentially JSON but allows for comments. For now, we output
 // standard JSON without comments since the format is compatible.
+// Future enhancement: Add comment support by using a JSONC library if needed.
 func formatJSONCConfig(cfg AgentConfig, servers map[string]interface{}) string {
 	// JSONC files can contain comments, but we'll use the same logic as JSON
 	// since we're generating the config programmatically without comments.

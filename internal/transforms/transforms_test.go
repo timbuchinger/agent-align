@@ -445,7 +445,7 @@ func TestOpenCodeTransformer_RemovesUnsupportedFields(t *testing.T) {
 	}
 
 	server := servers["server"].(map[string]interface{})
-	
+
 	if _, exists := server["autoApprove"]; exists {
 		t.Error("autoApprove should be removed")
 	}
