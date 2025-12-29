@@ -3,8 +3,9 @@
 ![Agent Align](docs/icon-resized.png)
 
 agent-align is a Go-based utility that keeps MCP configuration files aligned
-across coding agents such as Copilot, VSCode, Codex, Claude Code, Gemini, and
-others. Define your MCP servers once in `agent-align-mcp.yml` and agent-align
+across coding agents such as Copilot, VSCode, Codex, Claude Code, Gemini,
+Kilocode, OpenCode, and others. Define your MCP servers once in
+`agent-align-mcp.yml` and agent-align
 converts that configuration into the formats required by each tool while
 applying agent-specific tweaks automatically. Detailed documentation is hosted
 on GitHub Pages at <https://timbuchinger.github.io/agent-align/>.
@@ -76,7 +77,7 @@ Option | Description
 
 Defaults:
 
-- Agents: `copilot,vscode,codex,claudecode,gemini,kilocode`
+- Agents: `copilot,vscode,codex,claudecode,gemini,kilocode,opencode`
 - MCP config path: `agent-align-mcp.yml` in the same directory as the target config
 
 Use `-agents` to override the target list from the config file. If you omit
