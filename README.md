@@ -27,7 +27,7 @@ You can install agent-align using one of the following methods:
 **Homebrew (macOS and Linux):**
 
 ```bash
-brew install timbuchinger/agent-align/agent-align
+brew install timbuchinger/tap/agent-align
 ```
 
 **Manual download:**
