@@ -1,6 +1,8 @@
 # Agent Align
 
-![Agent Align](docs/icon-resized.png)
+<p align="center">
+  <img src="docs/icon-resized.png" alt="Agent Align" />
+</p>
 
 agent-align is a Go-based utility that keeps MCP configuration files aligned
 across coding agents such as Copilot, VSCode, Codex, Claude Code, Gemini,
