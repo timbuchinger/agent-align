@@ -490,3 +490,52 @@ func TestOpenCodeTransformer_NonMapServer(t *testing.T) {
 		t.Error("non-map server should remain unchanged")
 	}
 }
+
+func TestOpenCodeTransformer_AddsTypeWhenMissing(t *testing.T) {
+	transformer := &OpenCodeTransformer{}
+	servers := map[string]interface{}{
+		"command-based": map[string]interface{}{
+			"command": "npx",
+			"args":    []interface{}{"-y", "@upstash/context7-mcp@latest"},
+		},
+		"url-based": map[string]interface{}{
+			"url": "https://api.example.com/mcp",
+			"headers": map[string]interface{}{
+				"Authorization": "Bearer token",
+			},
+		},
+		"docker-command": map[string]interface{}{
+			"command": "docker",
+			"args": []interface{}{
+				"run",
+				"-i",
+				"--rm",
+				"--init",
+				"--pull=always",
+				"mcr.microsoft.com/playwright/mcp",
+			},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Command-based server should have type "local" added
+	commandServer := servers["command-based"].(map[string]interface{})
+	if commandServer["type"] != "local" {
+		t.Errorf("command-based server should have type 'local', got %v", commandServer["type"])
+	}
+
+	// URL-based server should have type "remote" added
+	urlServer := servers["url-based"].(map[string]interface{})
+	if urlServer["type"] != "remote" {
+		t.Errorf("url-based server should have type 'remote', got %v", urlServer["type"])
+	}
+
+	// Docker command server should have type "local" added
+	dockerServer := servers["docker-command"].(map[string]interface{})
+	if dockerServer["type"] != "local" {
+		t.Errorf("docker-command server should have type 'local', got %v", dockerServer["type"])
+	}
+}

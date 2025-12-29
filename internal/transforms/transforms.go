@@ -253,14 +253,24 @@ func (t *OpenCodeTransformer) Transform(servers map[string]interface{}) error {
 			delete(server, "env")
 		}
 
-		// Normalize type field: stdio -> local, streamable-http/http -> remote
+		// Add or normalize type field
+		// OpenCode requires a type field for all servers
 		if typ, ok := server["type"].(string); ok {
+			// Normalize existing type field: stdio -> local, streamable-http/http -> remote
 			normalized := strings.ToLower(strings.TrimSpace(typ))
 			switch normalized {
 			case "stdio":
 				server["type"] = "local"
 			case "streamable-http", "http":
 				server["type"] = "remote"
+			}
+		} else {
+			// Add type field when missing based on server configuration
+			// If server has a url, it's a remote server; otherwise it's local
+			if _, hasURL := server["url"]; hasURL {
+				server["type"] = "remote"
+			} else if _, hasCommand := server["command"]; hasCommand {
+				server["type"] = "local"
 			}
 		}
 
