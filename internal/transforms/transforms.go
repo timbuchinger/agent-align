@@ -198,8 +198,9 @@ func (t *ClaudeTransformer) Transform(servers map[string]interface{}) error {
 
 // GeminiTransformer removes fields that are not supported by Gemini's enhanced
 // MCP JSON config validation. As of recent Gemini updates, the validator rejects
-// configs that contain autoApprove, disabled, gallery, or type fields. These
-// fields must be removed before writing to ensure compatibility with Gemini.
+// configs that contain alwaysAllow, autoApprove, disabled, gallery, or type
+// fields. These fields must be removed before writing to ensure compatibility
+// with Gemini.
 type GeminiTransformer struct{}
 
 // Transform removes unsupported fields from all server configurations.
@@ -211,6 +212,7 @@ func (t *GeminiTransformer) Transform(servers map[string]interface{}) error {
 		}
 
 		// Remove fields that Gemini does not support
+		delete(server, "alwaysAllow")
 		delete(server, "autoApprove")
 		delete(server, "disabled")
 		delete(server, "gallery")

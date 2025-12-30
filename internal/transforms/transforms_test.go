@@ -219,10 +219,11 @@ func TestGeminiTransformer_RemovesUnsupportedFields(t *testing.T) {
 	transformer := &GeminiTransformer{}
 	servers := map[string]interface{}{
 		"server1": map[string]interface{}{
-			"command":     "npx",
-			"args":        []interface{}{"-y", "some-mcp-server"},
-			"autoApprove": []interface{}{},
-			"disabled":    false,
+			"command":      "npx",
+			"args":         []interface{}{"-y", "some-mcp-server"},
+			"alwaysAllow":  []interface{}{"tool1", "tool2"},
+			"autoApprove":  []interface{}{},
+			"disabled":     false,
 		},
 		"server2": map[string]interface{}{
 			"type":    "stdio",
@@ -233,9 +234,10 @@ func TestGeminiTransformer_RemovesUnsupportedFields(t *testing.T) {
 			},
 		},
 		"server3": map[string]interface{}{
-			"command":  "node",
-			"kept":     "value",
-			"disabled": true,
+			"command":     "node",
+			"kept":        "value",
+			"alwaysAllow": []interface{}{"monitor"},
+			"disabled":    true,
 		},
 	}
 
@@ -243,8 +245,11 @@ func TestGeminiTransformer_RemovesUnsupportedFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify server1 has autoApprove and disabled removed but other fields remain
+	// Verify server1 has alwaysAllow, autoApprove and disabled removed but other fields remain
 	server1 := servers["server1"].(map[string]interface{})
+	if _, exists := server1["alwaysAllow"]; exists {
+		t.Error("alwaysAllow should be removed from server1")
+	}
 	if _, exists := server1["autoApprove"]; exists {
 		t.Error("autoApprove should be removed from server1")
 	}
@@ -273,8 +278,11 @@ func TestGeminiTransformer_RemovesUnsupportedFields(t *testing.T) {
 		t.Error("env should be preserved in server2")
 	}
 
-	// Verify server3 has disabled removed but kept field remains
+	// Verify server3 has alwaysAllow and disabled removed but kept field remains
 	server3 := servers["server3"].(map[string]interface{})
+	if _, exists := server3["alwaysAllow"]; exists {
+		t.Error("alwaysAllow should be removed from server3")
+	}
 	if _, exists := server3["disabled"]; exists {
 		t.Error("disabled should be removed from server3")
 	}
