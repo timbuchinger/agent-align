@@ -278,6 +278,7 @@ func (t *OpenCodeTransformer) Transform(servers map[string]interface{}) error {
 		}
 
 		// Remove fields that OpenCode doesn't use
+		delete(server, "alwaysAllow")
 		delete(server, "autoApprove")
 		delete(server, "disabled")
 		delete(server, "gallery")
