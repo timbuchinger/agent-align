@@ -438,6 +438,7 @@ func TestOpenCodeTransformer_RemovesUnsupportedFields(t *testing.T) {
 	servers := map[string]interface{}{
 		"server": map[string]interface{}{
 			"command":     "npx",
+			"alwaysAllow": []interface{}{"tool1", "tool2"},
 			"autoApprove": []interface{}{},
 			"disabled":    false,
 			"gallery":     true,
@@ -454,6 +455,9 @@ func TestOpenCodeTransformer_RemovesUnsupportedFields(t *testing.T) {
 
 	server := servers["server"].(map[string]interface{})
 
+	if _, exists := server["alwaysAllow"]; exists {
+		t.Error("alwaysAllow should be removed")
+	}
 	if _, exists := server["autoApprove"]; exists {
 		t.Error("autoApprove should be removed")
 	}
