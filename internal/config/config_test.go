@@ -333,6 +333,102 @@ extraTargets:
 	}
 }
 
+func TestLoadRejectsUnknownTopLevelFields(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      - copilot
+unknownField: value
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown top-level field")
+	}
+	if !strings.Contains(err.Error(), "unknownField") {
+		t.Fatalf("error should mention unknown field 'unknownField', got: %v", err)
+	}
+}
+
+func TestLoadRejectsUnknownMCPFields(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  configPath: test.yml
+  unknownMCPField: value
+  targets:
+    agents:
+      - copilot
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown MCP field")
+	}
+	if !strings.Contains(err.Error(), "unknownMCPField") {
+		t.Fatalf("error should mention unknown field 'unknownMCPField', got: %v", err)
+	}
+}
+
+func TestLoadRejectsUnknownAgentFields(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      - name: copilot
+        unknownAgentField: value
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown agent field")
+	}
+	if !strings.Contains(err.Error(), "unknownAgentField") {
+		t.Fatalf("error should mention unknown field 'unknownAgentField', got: %v", err)
+	}
+}
+
+func TestLoadRejectsUnknownExtraTargetsFields(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      - copilot
+extraTargets:
+  unknownExtraField: value
+  files:
+    - source: ~/test.md
+      destinations:
+        - ~/dest.md
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown extraTargets field")
+	}
+	if !strings.Contains(err.Error(), "unknownExtraField") {
+		t.Fatalf("error should mention unknown field 'unknownExtraField', got: %v", err)
+	}
+}
+
+func TestLoadRejectsUnknownFileDestinationFields(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      - copilot
+extraTargets:
+  files:
+    - source: ~/test.md
+      destinations:
+        - path: ~/dest.md
+          unknownDestField: value
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown file destination field")
+	}
+	if !strings.Contains(err.Error(), "unknownDestField") {
+		t.Fatalf("error should mention unknown field 'unknownDestField', got: %v", err)
+	}
+}
+
 func writeConfigFile(t *testing.T, contents string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yml")

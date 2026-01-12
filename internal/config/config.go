@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -103,6 +104,21 @@ func (e *ExtraFileCopyRoute) UnmarshalYAML(node *yaml.Node) error {
 		e.Path = path
 		return nil
 	case yaml.MappingNode:
+		// Validate known fields
+		knownFields := map[string]bool{
+			"path":             true,
+			"pathToSkills":     true,
+			"appendSkills":     true,
+			"frontmatterPath":  true,
+			"appendToFilename": true,
+		}
+		for i := 0; i < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			if !knownFields[key] {
+				return fmt.Errorf("field %s not found in type config.ExtraFileCopyRoute", key)
+			}
+		}
+
 		type raw ExtraFileCopyRoute
 		var r raw
 		if err := node.Decode(&r); err != nil {
@@ -112,6 +128,7 @@ func (e *ExtraFileCopyRoute) UnmarshalYAML(node *yaml.Node) error {
 		e.PathToSkills = r.PathToSkills
 		e.AppendSkills = r.AppendSkills
 		e.FrontmatterPath = r.FrontmatterPath
+		e.AppendToFilename = r.AppendToFilename
 
 		// Backward compatibility: convert pathToSkills to appendSkills
 		if e.PathToSkills != "" && len(e.AppendSkills) == 0 {
@@ -138,6 +155,19 @@ func (a *AgentTarget) UnmarshalYAML(node *yaml.Node) error {
 		a.Name = name
 		return nil
 	case yaml.MappingNode:
+		// Validate known fields
+		knownFields := map[string]bool{
+			"name":               true,
+			"path":               true,
+			"disabledMcpServers": true,
+		}
+		for i := 0; i < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			if !knownFields[key] {
+				return fmt.Errorf("field %s not found in type config.AgentTarget", key)
+			}
+		}
+
 		type raw AgentTarget
 		var r raw
 		if err := node.Decode(&r); err != nil {
@@ -167,6 +197,19 @@ func (t *TargetsConfig) UnmarshalYAML(node *yaml.Node) error {
 		t.Agents = agents
 		return nil
 	case yaml.MappingNode:
+		// Validate known fields
+		knownFields := map[string]bool{
+			"agents":            true,
+			"additional":        true,
+			"additionalTargets": true,
+		}
+		for i := 0; i < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			if !knownFields[key] {
+				return fmt.Errorf("field %s not found in type config.TargetsConfig", key)
+			}
+		}
+
 		type raw struct {
 			Agents            []AgentTarget     `yaml:"agents"`
 			Additional        AdditionalTargets `yaml:"additional"`
@@ -196,7 +239,9 @@ func Load(path string) (Config, error) {
 	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&cfg); err != nil {
 		return Config{}, fmt.Errorf("failed to parse config at %q: %w", path, err)
 	}
 
