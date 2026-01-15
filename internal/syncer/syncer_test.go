@@ -464,3 +464,72 @@ func TestFormatOpenCodeConfigPreservesExistingSettings(t *testing.T) {
 		t.Fatal("old-server should have been replaced")
 	}
 }
+
+func TestFormatOpenCodeConfigWithComments(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "opencode.jsonc")
+	// JSONC file with comments that should be stripped when parsing
+	existing := `{
+  // Theme configuration
+  "theme": "dark",
+  /* Editor settings for
+     the OpenCode editor */
+  "editor": {
+    "fontSize": 14,
+    "tabSize": 2 // Number of spaces per tab
+  },
+  // MCP server configuration
+  "mcp": {
+    "old-server": {
+      "command": ["node", "old.js"]
+    }
+  }
+}`
+	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+		t.Fatalf("failed to write existing config: %v", err)
+	}
+
+	servers := map[string]interface{}{
+		"new-server": map[string]interface{}{
+			"command": []interface{}{"npx", "-y", "tool"},
+		},
+	}
+	cfg := AgentConfig{Name: "opencode", FilePath: path, NodeName: "mcp", Format: "jsonc"}
+	result := formatConfig(cfg, servers)
+
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("result not valid JSON: %v", err)
+	}
+
+	// Theme should be preserved
+	if parsed["theme"] != "dark" {
+		t.Fatalf("theme should be preserved, got %v", parsed["theme"])
+	}
+
+	// Editor settings should be preserved
+	editor, ok := parsed["editor"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("editor settings should be preserved, got %v", parsed["editor"])
+	}
+	if editor["fontSize"] != float64(14) {
+		t.Fatalf("editor fontSize should be preserved, got %v", editor["fontSize"])
+	}
+	if editor["tabSize"] != float64(2) {
+		t.Fatalf("editor tabSize should be preserved, got %v", editor["tabSize"])
+	}
+
+	// mcp node should have new server
+	mcp, ok := parsed["mcp"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mcp missing in output: %v", parsed)
+	}
+	if _, ok := mcp["new-server"]; !ok {
+		t.Fatal("new-server should be present in mcp block")
+	}
+
+	// Old server should be replaced
+	if _, ok := mcp["old-server"]; ok {
+		t.Fatal("old-server should have been replaced")
+	}
+}
