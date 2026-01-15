@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"agent-align/internal/transforms"
+	"github.com/tidwall/jsonc"
 )
 
 // AgentTarget allows overrides for an agent destination.
@@ -279,14 +280,35 @@ func formatJSONConfig(cfg AgentConfig, servers map[string]interface{}) string {
 }
 
 // formatJSONCConfig formats servers as JSONC (JSON with Comments).
-// JSONC is essentially JSON but allows for comments. For now, we output
-// standard JSON without comments since the format is compatible.
-// Future enhancement: Add comment support by using a JSONC library if needed.
+// It reads existing JSONC files (which may contain comments), strips the comments,
+// merges the MCP servers, and writes back standard JSON.
 func formatJSONCConfig(cfg AgentConfig, servers map[string]interface{}) string {
-	// JSONC files can contain comments, but we'll use the same logic as JSON
-	// since we're generating the config programmatically without comments.
-	// The key difference is the file extension and that parsers must support comments.
-	return formatJSONConfig(cfg, servers)
+	// If no node name is provided, just render servers as the full file.
+	if cfg.NodeName == "" {
+		return formatToJSON("", servers)
+	}
+
+	var existing map[string]interface{}
+	if data, err := os.ReadFile(cfg.FilePath); err == nil {
+		// Use jsonc.ToJSON to strip comments from JSONC files
+		jsonData := jsonc.ToJSON(data)
+		if err := json.Unmarshal(jsonData, &existing); err != nil {
+			// If existing file can't be parsed, log a warning and fall back
+			// to an empty object so we can write a sane JSON file.
+			log.Printf("warning: failed to parse existing JSONC %q: %v; overwriting mcp node", cfg.FilePath, err)
+			existing = make(map[string]interface{})
+		}
+	}
+	if existing == nil {
+		existing = make(map[string]interface{})
+	}
+
+	existing[cfg.NodeName] = servers
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 // formatToTOML converts servers to Codex TOML format
