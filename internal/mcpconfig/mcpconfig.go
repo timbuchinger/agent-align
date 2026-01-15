@@ -1,6 +1,7 @@
 package mcpconfig
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -20,7 +21,9 @@ func Load(path string) (map[string]interface{}, error) {
 		Servers    map[string]interface{} `yaml:"servers"`
 		MCPServers map[string]interface{} `yaml:"mcpServers"`
 	}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&raw); err != nil {
 		return nil, fmt.Errorf("failed to parse MCP config at %q: %w", path, err)
 	}
 

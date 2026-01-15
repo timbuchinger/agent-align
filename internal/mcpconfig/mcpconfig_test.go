@@ -3,6 +3,7 @@ package mcpconfig
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -234,5 +235,53 @@ func TestLoadWithEnvVarInArrays(t *testing.T) {
 
 	if args[1] != "--flag=custom-arg" {
 		t.Errorf("expected second arg to be expanded, got %v", args[1])
+	}
+}
+
+func TestLoadRejectsUnknownTopLevelFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.yml")
+	content := `servers:
+  test:
+    command: npx
+    args: ["tool"]
+unknownField: value
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown top-level field")
+	}
+	if !strings.Contains(err.Error(), "unknownField") {
+		t.Fatalf("error should mention unknown field 'unknownField', got: %v", err)
+	}
+}
+
+func TestLoadRejectsUnknownServerFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.yml")
+	// Note: The MCP config allows arbitrary fields within server definitions
+	// since they're stored as map[string]interface{}. This test verifies
+	// that unknown fields at the top level (not within a server) are rejected.
+	content := `servers:
+  test:
+    command: npx
+    args: ["tool"]
+mcpServers:
+  other:
+    command: node
+unknownTopField: invalid
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown top-level field")
+	}
+	if !strings.Contains(err.Error(), "unknownTopField") {
+		t.Fatalf("error should mention unknown field 'unknownTopField', got: %v", err)
 	}
 }
