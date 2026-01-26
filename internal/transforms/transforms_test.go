@@ -166,6 +166,59 @@ func TestCopilotTransformer_NonMapServer(t *testing.T) {
 	}
 }
 
+func TestCopilotTransformer_AddsEmptyArgsForCommandServers(t *testing.T) {
+	transformer := &CopilotTransformer{}
+	servers := map[string]interface{}{
+		"command-with-args": map[string]interface{}{
+			"command": "npx",
+			"args":    []interface{}{"-y", "some-package"},
+		},
+		"command-without-args": map[string]interface{}{
+			"command": "mcp-grafana",
+		},
+		"http-server": map[string]interface{}{
+			"type": "http",
+			"url":  "https://example.test",
+		},
+		"local-type-without-args": map[string]interface{}{
+			"type":    "local",
+			"command": "uvx",
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Command server with args should keep its args
+	withArgs := servers["command-with-args"].(map[string]interface{})
+	if args, ok := withArgs["args"].([]interface{}); !ok || len(args) != 2 {
+		t.Errorf("command-with-args should keep its args, got %v", withArgs["args"])
+	}
+
+	// Command server without args should get empty args array
+	withoutArgs := servers["command-without-args"].(map[string]interface{})
+	if args, ok := withoutArgs["args"].([]interface{}); !ok {
+		t.Errorf("command-without-args should have args array, got %v", withoutArgs["args"])
+	} else if len(args) != 0 {
+		t.Errorf("command-without-args should have empty args array, got %v", args)
+	}
+
+	// HTTP server should not have args added
+	httpServer := servers["http-server"].(map[string]interface{})
+	if _, hasArgs := httpServer["args"]; hasArgs {
+		t.Errorf("http-server should not have args, got %v", httpServer["args"])
+	}
+
+	// Local type server without args should get empty args array
+	localServer := servers["local-type-without-args"].(map[string]interface{})
+	if args, ok := localServer["args"].([]interface{}); !ok {
+		t.Errorf("local-type-without-args should have args array, got %v", localServer["args"])
+	} else if len(args) != 0 {
+		t.Errorf("local-type-without-args should have empty args array, got %v", args)
+	}
+}
+
 func TestIsNetworkServer(t *testing.T) {
 	tests := []struct {
 		name   string
