@@ -102,7 +102,7 @@ func addToolsArrayIfMissing(server map[string]interface{}) {
 
 // addArgsArrayIfMissingForCommandServers adds an empty "args" array to command-based
 // servers if not present. Command-based servers are those that have a "command" field
-// and are not HTTP servers (type != "http").
+// and are not HTTP servers (type != "http" or "streamable-http").
 func addArgsArrayIfMissingForCommandServers(server map[string]interface{}) {
 	// Only add args if this is a command-based server
 	_, hasCommand := server["command"]
@@ -111,9 +111,10 @@ func addArgsArrayIfMissingForCommandServers(server map[string]interface{}) {
 	}
 
 	// Skip if this is an HTTP server (even if it has a command field)
+	// Check for both http and streamable-http since this runs before type normalization
 	if typ, ok := server["type"].(string); ok {
 		normalizedType := strings.ToLower(strings.TrimSpace(typ))
-		if normalizedType == "http" {
+		if normalizedType == "http" || normalizedType == "streamable-http" {
 			return
 		}
 	}

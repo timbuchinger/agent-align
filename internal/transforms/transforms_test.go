@@ -180,6 +180,10 @@ func TestCopilotTransformer_AddsEmptyArgsForCommandServers(t *testing.T) {
 			"type": "http",
 			"url":  "https://example.test",
 		},
+		"streamable-http-server": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "https://example.test",
+		},
 		"local-type-without-args": map[string]interface{}{
 			"type":    "local",
 			"command": "uvx",
@@ -208,6 +212,12 @@ func TestCopilotTransformer_AddsEmptyArgsForCommandServers(t *testing.T) {
 	httpServer := servers["http-server"].(map[string]interface{})
 	if _, hasArgs := httpServer["args"]; hasArgs {
 		t.Errorf("http-server should not have args, got %v", httpServer["args"])
+	}
+
+	// Streamable-HTTP server should not have args added
+	streamableServer := servers["streamable-http-server"].(map[string]interface{})
+	if _, hasArgs := streamableServer["args"]; hasArgs {
+		t.Errorf("streamable-http-server should not have args, got %v", streamableServer["args"])
 	}
 
 	// Local type server without args should get empty args array
