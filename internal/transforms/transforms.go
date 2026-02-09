@@ -45,6 +45,7 @@ type CopilotTransformer struct{}
 
 // Transform applies Copilot-specific modifications:
 // - Adds an empty "tools" array to every server if not present
+// - Adds an empty "args" array to command-based servers if not present
 // - Normalizes network transport types to the values Copilot expects
 // - Validates that network-based servers have both "type" and "url" fields
 func (t *CopilotTransformer) Transform(servers map[string]interface{}) error {
@@ -64,6 +65,7 @@ func (t *CopilotTransformer) Transform(servers map[string]interface{}) error {
 // transformServer applies transformations to a single server configuration.
 func (t *CopilotTransformer) transformServer(name string, server map[string]interface{}) error {
 	addToolsArrayIfMissing(server)
+	addArgsArrayIfMissingForCommandServers(server)
 
 	if typ, ok := server["type"].(string); ok {
 		switch strings.ToLower(strings.TrimSpace(typ)) {
@@ -95,6 +97,31 @@ func isNetworkServer(server map[string]interface{}) bool {
 func addToolsArrayIfMissing(server map[string]interface{}) {
 	if _, hasTools := server["tools"]; !hasTools {
 		server["tools"] = []interface{}{}
+	}
+}
+
+// addArgsArrayIfMissingForCommandServers adds an empty "args" array to command-based
+// servers if not present. Command-based servers are those that have a "command" field
+// and are not HTTP servers (type != "http" or "streamable-http").
+func addArgsArrayIfMissingForCommandServers(server map[string]interface{}) {
+	// Only add args if this is a command-based server
+	_, hasCommand := server["command"]
+	if !hasCommand {
+		return
+	}
+
+	// Skip if this is an HTTP server (even if it has a command field)
+	// Check for both http and streamable-http since this runs before type normalization
+	if typ, ok := server["type"].(string); ok {
+		normalizedType := strings.ToLower(strings.TrimSpace(typ))
+		if normalizedType == "http" || normalizedType == "streamable-http" {
+			return
+		}
+	}
+
+	// Add empty args array if not present
+	if _, hasArgs := server["args"]; !hasArgs {
+		server["args"] = []interface{}{}
 	}
 }
 
