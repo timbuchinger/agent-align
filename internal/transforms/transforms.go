@@ -44,7 +44,7 @@ func (t *NoOpTransformer) Transform(servers map[string]interface{}) error {
 type CopilotTransformer struct{}
 
 // Transform applies Copilot-specific modifications:
-// - Adds an empty "tools" array to every server if not present
+// - Adds a "tools" array with wildcard ["*"] to every server if not present
 // - Adds an empty "args" array to command-based servers if not present
 // - Normalizes network transport types to the values Copilot expects
 // - Validates that network-based servers have both "type" and "url" fields
@@ -93,10 +93,10 @@ func isNetworkServer(server map[string]interface{}) bool {
 	return hasType || hasURL
 }
 
-// addToolsArrayIfMissing adds an empty "tools" array to the server if not present.
+// addToolsArrayIfMissing adds a "tools" array with wildcard ["*"] to the server if not present.
 func addToolsArrayIfMissing(server map[string]interface{}) {
 	if _, hasTools := server["tools"]; !hasTools {
-		server["tools"] = []interface{}{}
+		server["tools"] = []interface{}{"*"}
 	}
 }
 

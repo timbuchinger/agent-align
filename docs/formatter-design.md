@@ -42,7 +42,7 @@ Note: Kilocode config paths
 
 `internal/transforms` hosts agent-specific rules:
 
-- Copilot: ensures every server has a `tools` array, renames `stdio` → `local`
+- Copilot: ensures every server has a `tools` array (defaults to `["*"]` wildcard), renames `stdio` → `local`
   and `streamable-http` → `http`, and validates network servers include both
   `type` and `url`.
 - Codex: replaces GitHub `Authorization` headers with the static

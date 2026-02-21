@@ -89,6 +89,18 @@ func TestCopilotTransformer_AddsToolsAndNormalizesTypes(t *testing.T) {
 		}
 	}
 
+	// Verify servers without tools get wildcard ["*"]
+	commandTools := servers["command"].(map[string]interface{})["tools"].([]interface{})
+	if len(commandTools) != 1 || commandTools[0] != "*" {
+		t.Errorf("expected command server to have tools=[\"*\"], got %v", commandTools)
+	}
+
+	// Verify servers with existing tools keep them
+	networkStreamTools := servers["network-stream"].(map[string]interface{})["tools"].([]interface{})
+	if len(networkStreamTools) != 1 || networkStreamTools[0] != "kept" {
+		t.Errorf("expected network-stream server to keep existing tools=[\"kept\"], got %v", networkStreamTools)
+	}
+
 	if servers["network-stdio"].(map[string]interface{})["type"] != "local" {
 		t.Errorf("expected stdio to be normalized to local, got %v", servers["network-stdio"].(map[string]interface{})["type"])
 	}
