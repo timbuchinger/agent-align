@@ -46,3 +46,12 @@ extraTargets:
 
           appendToFilename: ".prompt"
         - path: /path/to/another/prompts
+
+allowedTools:
+  alwaysAllowedTools:
+    - shell(git fetch)
+    - shell(git pull)
+  targets:
+    agents:
+      - copilot
+

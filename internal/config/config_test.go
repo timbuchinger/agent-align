@@ -437,3 +437,102 @@ func writeConfigFile(t *testing.T, contents string) string {
 	}
 	return path
 }
+
+func TestLoadWithAllowedTools(t *testing.T) {
+	content := `mcpServers:
+  targets:
+    agents:
+      - copilot
+allowedTools:
+  alwaysAllowedTools:
+    - shell(git fetch)
+    - shell(git pull)
+  targets:
+    agents:
+      - copilot
+      - vscode
+`
+
+	path := writeConfigFile(t, content)
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if len(got.AllowedTools.AlwaysAllowedTools) != 2 {
+		t.Fatalf("expected 2 allowed tools, got %d", len(got.AllowedTools.AlwaysAllowedTools))
+	}
+	if got.AllowedTools.AlwaysAllowedTools[0] != "shell(git fetch)" {
+		t.Errorf("unexpected tool: %s", got.AllowedTools.AlwaysAllowedTools[0])
+	}
+	if got.AllowedTools.AlwaysAllowedTools[1] != "shell(git pull)" {
+		t.Errorf("unexpected tool: %s", got.AllowedTools.AlwaysAllowedTools[1])
+	}
+
+	if len(got.AllowedTools.Targets.Agents) != 2 {
+		t.Fatalf("expected 2 target agents, got %d", len(got.AllowedTools.Targets.Agents))
+	}
+	if got.AllowedTools.Targets.Agents[0] != "copilot" {
+		t.Errorf("unexpected agent: %s", got.AllowedTools.Targets.Agents[0])
+	}
+	if got.AllowedTools.Targets.Agents[1] != "vscode" {
+		t.Errorf("unexpected agent: %s", got.AllowedTools.Targets.Agents[1])
+	}
+}
+
+func TestLoadAllowedToolsNormalizesAgentNames(t *testing.T) {
+	content := `mcpServers:
+  targets:
+    agents:
+      - copilot
+allowedTools:
+  alwaysAllowedTools:
+    - shell(git fetch)
+  targets:
+    agents:
+      - Copilot
+      - VSCODE
+`
+
+	path := writeConfigFile(t, content)
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	// Agent names should be normalized to lowercase
+	if got.AllowedTools.Targets.Agents[0] != "copilot" {
+		t.Errorf("expected 'copilot', got '%s'", got.AllowedTools.Targets.Agents[0])
+	}
+	if got.AllowedTools.Targets.Agents[1] != "vscode" {
+		t.Errorf("expected 'vscode', got '%s'", got.AllowedTools.Targets.Agents[1])
+	}
+}
+
+func TestLoadAllowedToolsTrimsWhitespace(t *testing.T) {
+	content := `mcpServers:
+  targets:
+    agents:
+      - copilot
+allowedTools:
+  alwaysAllowedTools:
+    - "  shell(git fetch)  "
+    - "shell(git pull)"
+  targets:
+    agents:
+      - "  copilot  "
+`
+
+	path := writeConfigFile(t, content)
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if got.AllowedTools.AlwaysAllowedTools[0] != "shell(git fetch)" {
+		t.Errorf("whitespace not trimmed: %q", got.AllowedTools.AlwaysAllowedTools[0])
+	}
+	if got.AllowedTools.Targets.Agents[0] != "copilot" {
+		t.Errorf("agent whitespace not trimmed: %q", got.AllowedTools.Targets.Agents[0])
+	}
+}

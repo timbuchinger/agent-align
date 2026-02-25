@@ -361,6 +361,12 @@ func main() {
 		}
 	}
 	fmt.Println("\nConfiguration sync complete.")
+	
+	// Generate copilot wrapper script if allowed tools are configured
+	if err := generateCopilotWrapper(cfg); err != nil {
+		log.Printf("Warning: failed to generate copilot wrapper: %v", err)
+	}
+	
 	if len(applyErrors) > 0 {
 		fmt.Println("Encountered errors while applying changes:")
 		for _, msg := range applyErrors {

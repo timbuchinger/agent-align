@@ -14,6 +14,7 @@ import (
 type Config struct {
 	MCP          MCPConfig          `yaml:"mcpServers"`
 	ExtraTargets ExtraTargetsConfig `yaml:"extraTargets"`
+	AllowedTools AllowedToolsConfig `yaml:"allowedTools"`
 }
 
 // MCPConfig groups the MCP definition source and the target agents.
@@ -87,6 +88,17 @@ type ExtraDirectoryCopyRoute struct {
 type AdditionalJSONTarget struct {
 	FilePath string `yaml:"filePath"`
 	JSONPath string `yaml:"jsonPath"`
+}
+
+// AllowedToolsConfig groups the allowed tools and their target agents.
+type AllowedToolsConfig struct {
+	AlwaysAllowedTools []string            `yaml:"alwaysAllowedTools"`
+	Targets            AllowedToolsTargets `yaml:"targets"`
+}
+
+// AllowedToolsTargets lists destination agents for allowed tools.
+type AllowedToolsTargets struct {
+	Agents []string `yaml:"agents"`
 }
 
 // UnmarshalYAML lets file destinations be provided as either strings or mappings.
@@ -411,6 +423,26 @@ func Load(path string) (Config, error) {
 		}
 		cfg.ExtraTargets.Directories[i].Destinations = routes
 	}
+
+	// Normalize and validate allowed tools
+	var normalizedTools []string
+	for _, tool := range cfg.AllowedTools.AlwaysAllowedTools {
+		trimmed := strings.TrimSpace(tool)
+		if trimmed != "" {
+			normalizedTools = append(normalizedTools, trimmed)
+		}
+	}
+	cfg.AllowedTools.AlwaysAllowedTools = normalizedTools
+
+	// Normalize agent names in allowed tools targets
+	var normalizedAgents []string
+	for _, agent := range cfg.AllowedTools.Targets.Agents {
+		normalized := normalizeAgent(agent)
+		if normalized != "" {
+			normalizedAgents = append(normalizedAgents, normalized)
+		}
+	}
+	cfg.AllowedTools.Targets.Agents = normalizedAgents
 
 	if len(cfg.MCP.Targets.Agents) == 0 &&
 		len(cfg.MCP.Targets.Additional.JSON) == 0 &&
