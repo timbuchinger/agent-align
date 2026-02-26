@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -258,6 +259,27 @@ func main() {
 			}
 			fmt.Println()
 		}
+	}
+
+	// Display allowed tools wrapper if configured
+	if len(cfg.AllowedTools.AlwaysAllowedTools) > 0 {
+		fmt.Println("Allowed tools wrapper:")
+		homeDir, _ := os.UserHomeDir()
+		wrapperPath := filepath.Join(homeDir, "bin", "copilot")
+		fmt.Printf("  File: %s\n", wrapperPath)
+		fmt.Println("  Content:")
+		copilotPath, _ := exec.LookPath("copilot")
+		if copilotPath == "" {
+			copilotPath = "copilot"
+		}
+		script := buildWrapperScript(copilotPath, cfg.AllowedTools.AlwaysAllowedTools)
+		lines := strings.Split(script, "\n")
+		for _, line := range lines {
+			if line != "" {
+				fmt.Printf("    %s\n", line)
+			}
+		}
+		fmt.Println()
 	}
 
 	// If dry-run mode, exit without making changes
