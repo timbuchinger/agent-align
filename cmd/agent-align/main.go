@@ -265,14 +265,24 @@ func main() {
 	if len(cfg.AllowedTools.AlwaysAllowedTools) > 0 {
 		fmt.Println("Allowed tools wrapper:")
 		homeDir, _ := os.UserHomeDir()
-		wrapperPath := filepath.Join(homeDir, "bin", "acp")
-		fmt.Printf("  File: %s\n", wrapperPath)
-		fmt.Println("  Content:")
+		defaultBinDir := filepath.Join(homeDir, ".local", "bin")
+
 		copilotPath, _ := exec.LookPath("copilot")
 		if copilotPath == "" {
 			copilotPath = "copilot"
 		}
 		script := buildWrapperScript(copilotPath, cfg.AllowedTools.AlwaysAllowedTools)
+
+		for _, agent := range cfg.AllowedTools.Targets.Agents {
+			binDir := defaultBinDir
+			if agent.Path != "" {
+				binDir = agent.Path
+			}
+			wrapperPath := filepath.Join(binDir, "acp")
+			fmt.Printf("  File: %s\n", wrapperPath)
+		}
+
+		fmt.Println("  Content:")
 		lines := strings.Split(script, "\n")
 		for _, line := range lines {
 			if line != "" {

@@ -449,7 +449,8 @@ allowedTools:
     - shell(git pull)
   targets:
     agents:
-      - copilot
+      - name: copilot
+        path: ~/.local/bin/
       - vscode
 `
 
@@ -472,11 +473,18 @@ allowedTools:
 	if len(got.AllowedTools.Targets.Agents) != 2 {
 		t.Fatalf("expected 2 target agents, got %d", len(got.AllowedTools.Targets.Agents))
 	}
-	if got.AllowedTools.Targets.Agents[0] != "copilot" {
-		t.Errorf("unexpected agent: %s", got.AllowedTools.Targets.Agents[0])
+	if got.AllowedTools.Targets.Agents[0].Name != "copilot" {
+		t.Errorf("unexpected agent name: %s", got.AllowedTools.Targets.Agents[0].Name)
 	}
-	if got.AllowedTools.Targets.Agents[1] != "vscode" {
-		t.Errorf("unexpected agent: %s", got.AllowedTools.Targets.Agents[1])
+	// Just check that path expansion happened (not exact path due to temp dir)
+	if got.AllowedTools.Targets.Agents[0].Path == "" {
+		t.Error("agent path should be expanded")
+	}
+	if got.AllowedTools.Targets.Agents[1].Name != "vscode" {
+		t.Errorf("unexpected agent name: %s", got.AllowedTools.Targets.Agents[1].Name)
+	}
+	if got.AllowedTools.Targets.Agents[1].Path != "" {
+		t.Errorf("vscode should not have a path override, got %s", got.AllowedTools.Targets.Agents[1].Path)
 	}
 }
 
@@ -490,7 +498,7 @@ allowedTools:
     - shell(git fetch)
   targets:
     agents:
-      - Copilot
+      - name: Copilot
       - VSCODE
 `
 
@@ -501,15 +509,18 @@ allowedTools:
 	}
 
 	// Agent names should be normalized to lowercase
-	if got.AllowedTools.Targets.Agents[0] != "copilot" {
-		t.Errorf("expected 'copilot', got '%s'", got.AllowedTools.Targets.Agents[0])
+	if got.AllowedTools.Targets.Agents[0].Name != "copilot" {
+		t.Errorf("expected 'copilot', got '%s'", got.AllowedTools.Targets.Agents[0].Name)
 	}
-	if got.AllowedTools.Targets.Agents[1] != "vscode" {
-		t.Errorf("expected 'vscode', got '%s'", got.AllowedTools.Targets.Agents[1])
+	if got.AllowedTools.Targets.Agents[1].Name != "vscode" {
+		t.Errorf("expected 'vscode', got '%s'", got.AllowedTools.Targets.Agents[1].Name)
 	}
 }
 
 func TestLoadAllowedToolsTrimsWhitespace(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+
 	content := `mcpServers:
   targets:
     agents:
@@ -520,7 +531,8 @@ allowedTools:
     - "shell(git pull)"
   targets:
     agents:
-      - "  copilot  "
+      - name: "  copilot  "
+        path: "  ~/.local/bin/  "
 `
 
 	path := writeConfigFile(t, content)
@@ -532,7 +544,11 @@ allowedTools:
 	if got.AllowedTools.AlwaysAllowedTools[0] != "shell(git fetch)" {
 		t.Errorf("whitespace not trimmed: %q", got.AllowedTools.AlwaysAllowedTools[0])
 	}
-	if got.AllowedTools.Targets.Agents[0] != "copilot" {
-		t.Errorf("agent whitespace not trimmed: %q", got.AllowedTools.Targets.Agents[0])
+	if got.AllowedTools.Targets.Agents[0].Name != "copilot" {
+		t.Errorf("agent name whitespace not trimmed: %q", got.AllowedTools.Targets.Agents[0].Name)
+	}
+	expectedPath := filepath.Join(dir, ".local", "bin")
+	if got.AllowedTools.Targets.Agents[0].Path != expectedPath {
+		t.Errorf("agent path not properly expanded, expected %q got %q", expectedPath, got.AllowedTools.Targets.Agents[0].Path)
 	}
 }

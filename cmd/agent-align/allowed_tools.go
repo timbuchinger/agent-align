@@ -10,7 +10,8 @@ import (
 	"agent-align/internal/config"
 )
 
-// generateCopilotWrapper creates a wrapper script at ~/bin/acp that pre-approves
+// generateCopilotWrapper creates wrapper scripts for each configured agent at
+// their specified paths (or ~/.local/bin by default) that pre-approves
 // the configured allowed tools before invoking the real copilot CLI.
 func generateCopilotWrapper(cfg config.Config) error {
 	if len(cfg.AllowedTools.AlwaysAllowedTools) == 0 {
@@ -25,23 +26,34 @@ func generateCopilotWrapper(cfg config.Config) error {
 		return nil
 	}
 
-	// Create ~/bin directory if it doesn't exist
+	// Build the wrapper script content once
+	script := buildWrapperScript(copilotPath, cfg.AllowedTools.AlwaysAllowedTools)
+
+	// Get home directory for default path
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
-	binDir := filepath.Join(homeDir, "bin")
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create ~/bin directory: %w", err)
-	}
+	defaultBinDir := filepath.Join(homeDir, ".local", "bin")
 
-	// Build the wrapper script content
-	script := buildWrapperScript(copilotPath, cfg.AllowedTools.AlwaysAllowedTools)
+	// Generate wrapper for each configured agent
+	for _, agent := range cfg.AllowedTools.Targets.Agents {
+		// Use agent-specific path if provided, otherwise use default
+		binDir := defaultBinDir
+		if agent.Path != "" {
+			binDir = agent.Path
+		}
 
-	// Write the wrapper script
-	wrapperPath := filepath.Join(binDir, "acp")
-	if err := os.WriteFile(wrapperPath, []byte(script), 0o755); err != nil {
-		return fmt.Errorf("failed to write wrapper script to %s: %w", wrapperPath, err)
+		// Create bin directory if it doesn't exist
+		if err := os.MkdirAll(binDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", binDir, err)
+		}
+
+		// Write the wrapper script with agent name as filename
+		wrapperPath := filepath.Join(binDir, "acp")
+		if err := os.WriteFile(wrapperPath, []byte(script), 0o755); err != nil {
+			return fmt.Errorf("failed to write wrapper script to %s: %w", wrapperPath, err)
+		}
 	}
 
 	return nil

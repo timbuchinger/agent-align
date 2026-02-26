@@ -98,7 +98,13 @@ type AllowedToolsConfig struct {
 
 // AllowedToolsTargets lists destination agents for allowed tools.
 type AllowedToolsTargets struct {
-	Agents []string `yaml:"agents"`
+	Agents []AllowedToolsAgent `yaml:"agents"`
+}
+
+// AllowedToolsAgent specifies an agent that should receive an allowed tools wrapper.
+type AllowedToolsAgent struct {
+	Name string `yaml:"name"`
+	Path string `yaml:"path,omitempty"`
 }
 
 // UnmarshalYAML lets file destinations be provided as either strings or mappings.
@@ -149,6 +155,46 @@ func (e *ExtraFileCopyRoute) UnmarshalYAML(node *yaml.Node) error {
 		return nil
 	default:
 		return fmt.Errorf("file destination entry must be a string or mapping")
+	}
+}
+
+// UnmarshalYAML lets allowed tools agents be provided as either strings or mappings.
+func (a *AllowedToolsAgent) UnmarshalYAML(node *yaml.Node) error {
+	if node == nil {
+		return nil
+	}
+
+	switch node.Kind {
+	case yaml.ScalarNode:
+		var name string
+		if err := node.Decode(&name); err != nil {
+			return err
+		}
+		a.Name = name
+		return nil
+	case yaml.MappingNode:
+		// Validate known fields
+		knownFields := map[string]bool{
+			"name": true,
+			"path": true,
+		}
+		for i := 0; i < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			if !knownFields[key] {
+				return fmt.Errorf("field %s not found in type config.AllowedToolsAgent", key)
+			}
+		}
+
+		type raw AllowedToolsAgent
+		var r raw
+		if err := node.Decode(&r); err != nil {
+			return err
+		}
+		a.Name = r.Name
+		a.Path = r.Path
+		return nil
+	default:
+		return fmt.Errorf("allowed tools agent entry must be a string or mapping")
 	}
 }
 
@@ -434,13 +480,24 @@ func Load(path string) (Config, error) {
 	}
 	cfg.AllowedTools.AlwaysAllowedTools = normalizedTools
 
-	// Normalize agent names in allowed tools targets
-	var normalizedAgents []string
+	// Normalize agent names and paths in allowed tools targets
+	var normalizedAgents []AllowedToolsAgent
 	for _, agent := range cfg.AllowedTools.Targets.Agents {
-		normalized := normalizeAgent(agent)
-		if normalized != "" {
-			normalizedAgents = append(normalizedAgents, normalized)
+		normalized := normalizeAgent(agent.Name)
+		if normalized == "" {
+			continue
 		}
+		path := strings.TrimSpace(agent.Path)
+		if path != "" {
+			expanded, err := expandUserPath(path)
+			if err == nil {
+				path = expanded
+			}
+		}
+		normalizedAgents = append(normalizedAgents, AllowedToolsAgent{
+			Name: normalized,
+			Path: path,
+		})
 	}
 	cfg.AllowedTools.Targets.Agents = normalizedAgents
 

@@ -53,5 +53,6 @@ allowedTools:
     - shell(git pull)
   targets:
     agents:
-      - copilot
+      - name: copilot
+        path: ~/.local/bin/
 

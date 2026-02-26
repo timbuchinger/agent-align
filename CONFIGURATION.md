@@ -218,13 +218,15 @@ allowedTools:
     - shell(mkdir)
   targets:
     agents:
-      - copilot
+      - name: copilot
+        path: ~/.local/bin/  # optional, defaults to ~/.local/bin
+      - vscode              # uses default path
 ```
 
-When `allowedTools` is configured, agent-align automatically generates a wrapper
-script at `~/bin/acp` that invokes the real Copilot with the appropriate
-`--allow-tool` flags. This happens during normal execution; no separate setup
-command is needed.
+When `allowedTools` is configured, agent-align automatically generates wrapper
+scripts at the specified paths (or `~/.local/bin` by default) that invoke the
+real Copilot with the appropriate `--allow-tool` flags. This happens during
+normal execution; no separate setup command is needed.
 
 **Wrapper script example:**
 
@@ -235,7 +237,7 @@ command is needed.
   --allow-tool 'shell(git pull)' --allow-tool 'shell(mkdir)' "$@"
 ```
 
-You can now use the `acp` command instead of `copilot` to get pre-approved tools:
+You can now use the `acp` command to get pre-approved tools:
 ```bash
 acp chat "explain this code"
 ```
@@ -250,7 +252,8 @@ You can still pass additional flags at runtime (e.g.,
     specified in the format `namespace(tool)` (e.g., `shell(git fetch)`,
     `write`, `MyMCP(*)`). Refer to `copilot --allow-tool` for valid syntax.
   - `targets` (mapping) – groups related target settings.
-    - `agents` (sequence) – agent names that should receive the allowed tools
-      wrapper. Currently only `copilot` is supported; additional agents may be
-      added in the future. If omitted, defaults to `[copilot]` if
-      `alwaysAllowedTools` is non-empty.
+    - `agents` (sequence) – agent entries that should receive the allowed tools
+      wrapper. Each entry can be a simple agent name (string) or a mapping with
+      name and optional path override. Defaults to `~/.local/bin` if path
+      omitted. Currently only `copilot` is supported; additional agents may be
+      added in the future.
