@@ -222,7 +222,7 @@ allowedTools:
 ```
 
 When `allowedTools` is configured, agent-align automatically generates a wrapper
-script at `~/bin/copilot` that invokes the real Copilot with the appropriate
+script at `~/bin/acp` that invokes the real Copilot with the appropriate
 `--allow-tool` flags. This happens during normal execution; no separate setup
 command is needed.
 
@@ -235,8 +235,13 @@ command is needed.
   --allow-tool 'shell(git pull)' --allow-tool 'shell(mkdir)' "$@"
 ```
 
+You can now use the `acp` command instead of `copilot` to get pre-approved tools:
+```bash
+acp chat "explain this code"
+```
+
 You can still pass additional flags at runtime (e.g.,
-`copilot --deny-tool 'shell(git pull)'`) to override the defaults.
+`acp --deny-tool 'shell(git pull)'`) to override the defaults.
 
 ### Allowed Tools Configuration
 

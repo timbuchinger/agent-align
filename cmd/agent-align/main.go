@@ -265,7 +265,7 @@ func main() {
 	if len(cfg.AllowedTools.AlwaysAllowedTools) > 0 {
 		fmt.Println("Allowed tools wrapper:")
 		homeDir, _ := os.UserHomeDir()
-		wrapperPath := filepath.Join(homeDir, "bin", "copilot")
+		wrapperPath := filepath.Join(homeDir, "bin", "acp")
 		fmt.Printf("  File: %s\n", wrapperPath)
 		fmt.Println("  Content:")
 		copilotPath, _ := exec.LookPath("copilot")

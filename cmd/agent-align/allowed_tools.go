@@ -10,7 +10,7 @@ import (
 	"agent-align/internal/config"
 )
 
-// generateCopilotWrapper creates a wrapper script at ~/bin/copilot that pre-approves
+// generateCopilotWrapper creates a wrapper script at ~/bin/acp that pre-approves
 // the configured allowed tools before invoking the real copilot CLI.
 func generateCopilotWrapper(cfg config.Config) error {
 	if len(cfg.AllowedTools.AlwaysAllowedTools) == 0 {
@@ -39,7 +39,7 @@ func generateCopilotWrapper(cfg config.Config) error {
 	script := buildWrapperScript(copilotPath, cfg.AllowedTools.AlwaysAllowedTools)
 
 	// Write the wrapper script
-	wrapperPath := filepath.Join(binDir, "copilot")
+	wrapperPath := filepath.Join(binDir, "acp")
 	if err := os.WriteFile(wrapperPath, []byte(script), 0o755); err != nil {
 		return fmt.Errorf("failed to write wrapper script to %s: %w", wrapperPath, err)
 	}
