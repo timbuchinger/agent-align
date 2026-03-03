@@ -55,4 +55,8 @@ allowedTools:
     agents:
       - name: copilot
         path: ~/.local/bin/
+      - name: claude
+        path: ~/.claude/settings.json
+      - name: codex
+        path: ~/.codex/rules/agent-align.rules # custom path; defaults to ~/.codex/instructions.md
 
