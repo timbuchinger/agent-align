@@ -45,3 +45,16 @@ extraTargets:
           flatten: true
         - path: /path/to/another/prompts
           appendToFilename: ".prompt"
+
+allowedTools:
+  alwaysAllowedTools:
+    - shell(git fetch)
+    - shell(git pull)
+  targets:
+    agents:
+      - name: copilot
+        path: ~/.local/bin/
+      - name: claude
+        path: ~/.claude/settings.json
+      - name: codex
+        path: ~/.codex/rules/agent-align.rules # custom path; defaults to ~/.codex/instructions.md
