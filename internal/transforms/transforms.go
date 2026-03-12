@@ -180,23 +180,41 @@ func (t *CodexTransformer) Transform(servers map[string]interface{}) error {
 		return nil
 	}
 
+	// If a bearer token env var is already present, remove any Authorization
+	// header and then move remaining headers (if any) to http_headers.
 	if _, hasEnv := server["bearer_token_env_var"]; hasEnv {
 		delete(headers, "Authorization")
 		if len(headers) == 0 {
 			delete(server, "headers")
+			return nil
 		}
+		server["http_headers"] = headers
+		delete(server, "headers")
 		return nil
 	}
 
+	// If there's no Authorization header, still rename any headers to http_headers
 	if _, hasAuth := headers["Authorization"]; !hasAuth {
+		// Move any remaining headers to http_headers if present
+		if len(headers) == 0 {
+			delete(server, "headers")
+			return nil
+		}
+		server["http_headers"] = headers
+		delete(server, "headers")
 		return nil
 	}
 
+	// Authorization present and no existing env var: convert to env var and remove it
 	server["bearer_token_env_var"] = "CODEX_GITHUB_PERSONAL_ACCESS_TOKEN"
 	delete(headers, "Authorization")
 	if len(headers) == 0 {
 		delete(server, "headers")
+		return nil
 	}
+	// Move remaining headers to the Codex-expected `http_headers` field
+	server["http_headers"] = headers
+	delete(server, "headers")
 	return nil
 }
 
@@ -267,12 +285,12 @@ func (t *OpenCodeTransformer) Transform(servers map[string]interface{}) error {
 		if cmd, hasCmd := server["command"].(string); hasCmd {
 			var cmdArray []interface{}
 			cmdArray = append(cmdArray, cmd)
-			
+
 			if args, hasArgs := server["args"].([]interface{}); hasArgs {
 				cmdArray = append(cmdArray, args...)
 				delete(server, "args")
 			}
-			
+
 			server["command"] = cmdArray
 		}
 
