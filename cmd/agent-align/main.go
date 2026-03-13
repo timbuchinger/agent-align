@@ -261,32 +261,53 @@ func main() {
 		}
 	}
 
-	// Display allowed tools wrapper if configured
+	// Display allowed tools if configured
 	if len(cfg.AllowedTools.AlwaysAllowedTools) > 0 {
-		fmt.Println("Allowed tools wrapper:")
+		fmt.Println("Allowed tools:")
 		homeDir, _ := os.UserHomeDir()
-		defaultBinDir := filepath.Join(homeDir, ".local", "bin")
-
-		copilotPath, _ := exec.LookPath("copilot")
-		if copilotPath == "" {
-			copilotPath = "copilot"
-		}
-		script := buildWrapperScript(copilotPath, cfg.AllowedTools.AlwaysAllowedTools)
 
 		for _, agent := range cfg.AllowedTools.Targets.Agents {
-			binDir := defaultBinDir
-			if agent.Path != "" {
-				binDir = agent.Path
-			}
-			wrapperPath := filepath.Join(binDir, "acp")
-			fmt.Printf("  File: %s\n", wrapperPath)
-		}
-
-		fmt.Println("  Content:")
-		lines := strings.Split(script, "\n")
-		for _, line := range lines {
-			if line != "" {
-				fmt.Printf("    %s\n", line)
+			switch agent.Name {
+			case "copilot":
+				defaultBinDir := filepath.Join(homeDir, ".local", "bin")
+				binDir := defaultBinDir
+				if agent.Path != "" {
+					binDir = agent.Path
+				}
+				wrapperPath := filepath.Join(binDir, "acp")
+				copilotPath, _ := exec.LookPath("copilot")
+				if copilotPath == "" {
+					copilotPath = "copilot"
+				}
+				script := buildWrapperScript(copilotPath, cfg.AllowedTools.AlwaysAllowedTools)
+				fmt.Printf("  [copilot] File: %s\n", wrapperPath)
+				fmt.Println("  Content:")
+				for _, line := range strings.Split(script, "\n") {
+					if line != "" {
+						fmt.Printf("    %s\n", line)
+					}
+				}
+			case "claude":
+				settingsPath := filepath.Join(homeDir, ".claude", "settings.json")
+				if agent.Path != "" {
+					settingsPath = agent.Path
+				}
+				fmt.Printf("  [claude] File: %s\n", settingsPath)
+				fmt.Println("  Content (permissions.allow):")
+				for _, tool := range cfg.AllowedTools.AlwaysAllowedTools {
+					fmt.Printf("    %s\n", convertToolToClaudePermission(tool))
+				}
+			case "codex":
+				defaultCodexPath := filepath.Join(homeDir, ".codex", "instructions.md")
+				rulesPath := defaultCodexPath
+				if agent.Path != "" {
+					rulesPath = agent.Path
+				}
+				fmt.Printf("  [codex] File: %s\n", rulesPath)
+				fmt.Println("  Content:")
+				for _, tool := range cfg.AllowedTools.AlwaysAllowedTools {
+					fmt.Printf("    %s\n", convertToolToCodexRule(tool))
+				}
 			}
 		}
 		fmt.Println()
@@ -393,10 +414,16 @@ func main() {
 		}
 	}
 	fmt.Println("\nConfiguration sync complete.")
-	
-	// Generate copilot wrapper script if allowed tools are configured
+
+	// Generate allowed tools outputs if configured
 	if err := generateCopilotWrapper(cfg); err != nil {
 		log.Printf("Warning: failed to generate copilot wrapper: %v", err)
+	}
+	if err := generateClaudePermissions(cfg); err != nil {
+		log.Printf("Warning: failed to generate Claude permissions: %v", err)
+	}
+	if err := generateCodexRules(cfg); err != nil {
+		log.Printf("Warning: failed to generate Codex rules: %v", err)
 	}
 	
 	if len(applyErrors) > 0 {
