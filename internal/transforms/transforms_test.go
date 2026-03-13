@@ -290,6 +290,149 @@ func TestCodexTransformerGithubToken(t *testing.T) {
 	}
 }
 
+func TestCodexTransformer_NonGithubServerHeaders(t *testing.T) {
+	transformer := &CodexTransformer{}
+	servers := map[string]interface{}{
+		"myserver": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "https://api.example.test",
+			"headers": map[string]interface{}{
+				"X-API-Key": "secret",
+			},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	server := servers["myserver"].(map[string]interface{})
+
+	// headers should be renamed to http_headers
+	if _, exists := server["headers"]; exists {
+		t.Error("headers field should be removed")
+	}
+	httpHeaders, ok := server["http_headers"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("http_headers should exist and be a map, got %T", server["http_headers"])
+	}
+	if httpHeaders["X-API-Key"] != "secret" {
+		t.Errorf("expected X-API-Key to be preserved, got %v", httpHeaders["X-API-Key"])
+	}
+
+	// bearer_token_env_var should NOT be set for non-github servers
+	if _, exists := server["bearer_token_env_var"]; exists {
+		t.Error("bearer_token_env_var should not be set for non-github servers")
+	}
+}
+
+func TestCodexTransformer_MultipleServers(t *testing.T) {
+	transformer := &CodexTransformer{}
+	servers := map[string]interface{}{
+		"github": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "https://api.example.test",
+			"headers": map[string]interface{}{
+				"Authorization": "Bearer ghp_example",
+				"X-Custom":      "value",
+			},
+		},
+		"other": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "https://other.example.test",
+			"headers": map[string]interface{}{
+				"X-Other-Header": "other-value",
+			},
+		},
+		"noheaders": map[string]interface{}{
+			"command": "npx",
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// github: Authorization → bearer_token_env_var, remaining headers → http_headers
+	github := servers["github"].(map[string]interface{})
+	if github["bearer_token_env_var"] != "CODEX_GITHUB_PERSONAL_ACCESS_TOKEN" {
+		t.Errorf("github: expected bearer_token_env_var, got %v", github["bearer_token_env_var"])
+	}
+	if _, exists := github["headers"]; exists {
+		t.Error("github: headers field should be removed")
+	}
+	githubHTTPHeaders, ok := github["http_headers"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("github: http_headers should exist, got %T", github["http_headers"])
+	}
+	if githubHTTPHeaders["X-Custom"] != "value" {
+		t.Errorf("github: X-Custom should be in http_headers, got %v", githubHTTPHeaders["X-Custom"])
+	}
+	if _, exists := githubHTTPHeaders["Authorization"]; exists {
+		t.Error("github: Authorization should not be in http_headers")
+	}
+
+	// other: headers → http_headers, no bearer_token_env_var
+	other := servers["other"].(map[string]interface{})
+	if _, exists := other["headers"]; exists {
+		t.Error("other: headers field should be removed")
+	}
+	otherHTTPHeaders, ok := other["http_headers"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("other: http_headers should exist, got %T", other["http_headers"])
+	}
+	if otherHTTPHeaders["X-Other-Header"] != "other-value" {
+		t.Errorf("other: X-Other-Header should be preserved, got %v", otherHTTPHeaders["X-Other-Header"])
+	}
+	if _, exists := other["bearer_token_env_var"]; exists {
+		t.Error("other: bearer_token_env_var should not be set")
+	}
+
+	// noheaders: unchanged
+	noheaders := servers["noheaders"].(map[string]interface{})
+	if noheaders["command"] != "npx" {
+		t.Error("noheaders: command should be preserved")
+	}
+	if _, exists := noheaders["http_headers"]; exists {
+		t.Error("noheaders: http_headers should not be added when there were no headers")
+	}
+}
+
+func TestCodexTransformer_NoServers(t *testing.T) {
+	transformer := &CodexTransformer{}
+	servers := map[string]interface{}{}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error for empty servers: %v", err)
+	}
+}
+
+func TestCodexTransformer_NonMapServer(t *testing.T) {
+	transformer := &CodexTransformer{}
+	servers := map[string]interface{}{
+		"invalid": "not-a-map",
+		"valid": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "https://example.test",
+			"headers": map[string]interface{}{
+				"X-Key": "val",
+			},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if servers["invalid"] != "not-a-map" {
+		t.Error("non-map server should remain unchanged")
+	}
+	valid := servers["valid"].(map[string]interface{})
+	if _, exists := valid["http_headers"]; !exists {
+		t.Error("valid server should have http_headers")
+	}
+}
+
 func TestGeminiTransformer_RemovesUnsupportedFields(t *testing.T) {
 	transformer := &GeminiTransformer{}
 	servers := map[string]interface{}{
