@@ -163,58 +163,41 @@ func validateNetworkServer(name string, server map[string]interface{}) error {
 // CodexTransformer applies Codex-specific conversions.
 type CodexTransformer struct{}
 
-// Transform converts GitHub Authorization headers into the env var token expected by Codex.
+// Transform renames the "headers" field to "http_headers" for every server so
+// that Codex can parse them correctly.  For the special "github" server it also
+// converts an Authorization header into the bearer_token_env_var env-var field
+// that Codex expects.
 func (t *CodexTransformer) Transform(servers map[string]interface{}) error {
-	githubRaw, ok := servers["github"]
-	if !ok {
-		return nil
-	}
+	for name, serverRaw := range servers {
+		server, ok := serverRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
 
-	server, ok := githubRaw.(map[string]interface{})
-	if !ok {
-		return nil
-	}
+		headers, hasHeaders := server["headers"].(map[string]interface{})
+		if !hasHeaders {
+			continue
+		}
 
-	headers, hasHeaders := server["headers"].(map[string]interface{})
-	if !hasHeaders {
-		return nil
-	}
+		// For the github server, convert an Authorization header into the
+		// Codex bearer_token_env_var field (unless one already exists).
+		if name == "github" {
+			if _, hasEnv := server["bearer_token_env_var"]; !hasEnv {
+				if _, hasAuth := headers["Authorization"]; hasAuth {
+					server["bearer_token_env_var"] = "CODEX_GITHUB_PERSONAL_ACCESS_TOKEN"
+				}
+			}
+			delete(headers, "Authorization")
+		}
 
-	// If a bearer token env var is already present, remove any Authorization
-	// header and then move remaining headers (if any) to http_headers.
-	if _, hasEnv := server["bearer_token_env_var"]; hasEnv {
-		delete(headers, "Authorization")
+		// Rename headers → http_headers for all servers.
 		if len(headers) == 0 {
 			delete(server, "headers")
-			return nil
-		}
-		server["http_headers"] = headers
-		delete(server, "headers")
-		return nil
-	}
-
-	// If there's no Authorization header, still rename any headers to http_headers
-	if _, hasAuth := headers["Authorization"]; !hasAuth {
-		// Move any remaining headers to http_headers if present
-		if len(headers) == 0 {
+		} else {
+			server["http_headers"] = headers
 			delete(server, "headers")
-			return nil
 		}
-		server["http_headers"] = headers
-		delete(server, "headers")
-		return nil
 	}
-
-	// Authorization present and no existing env var: convert to env var and remove it
-	server["bearer_token_env_var"] = "CODEX_GITHUB_PERSONAL_ACCESS_TOKEN"
-	delete(headers, "Authorization")
-	if len(headers) == 0 {
-		delete(server, "headers")
-		return nil
-	}
-	// Move remaining headers to the Codex-expected `http_headers` field
-	server["http_headers"] = headers
-	delete(server, "headers")
 	return nil
 }
 
