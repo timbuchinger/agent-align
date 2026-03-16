@@ -194,7 +194,7 @@ jobs:
           # This expects `secrets.TAP_REPO_SSH_KEY` to contain the private key
           echo "Setting up SSH agent via action"
       - name: Setup SSH key for Homebrew tap
-        uses: webfactory/ssh-agent@v0.9.1
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.TAP_REPO_SSH_KEY }}
 
