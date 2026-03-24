@@ -238,6 +238,7 @@ normal execution; no separate setup command is needed.
 ```
 
 You can now use the `acp` command to get pre-approved tools:
+
 ```bash
 acp chat "explain this code"
 ```
@@ -257,3 +258,48 @@ You can still pass additional flags at runtime (e.g.,
       name and optional path override. Defaults to `~/.local/bin` if path
       omitted. Currently only `copilot` is supported; additional agents may be
       added in the future.
+
+## Archive Targets
+
+The `archiveTargets` section instructs agent-align to create zip archives from
+subdirectories of a source directory and write them to a destination directory.
+
+For each immediate subdirectory under `source`, a zip file named after that
+directory is created at `destination`. The zip file contains the full recursive
+contents of the subdirectory.
+
+```yaml
+archiveTargets:
+  - source: /path/to/source
+    destination: /path/to/destination
+```
+
+For example, given the directory layout:
+
+```text
+/path/to/source/
+  project-a/
+    main.go
+    README.md
+  project-b/
+    index.js
+```
+
+Running agent-align produces:
+
+```text
+/path/to/destination/
+  project-a.zip   # contains main.go, README.md
+  project-b.zip   # contains index.js
+```
+
+Files directly under `source` (not inside a subdirectory) are not archived.
+
+### Archive Targets Configuration
+
+- `archiveTargets` (sequence, optional) – list of archive operations.
+  - `source` (string, required) – path to the directory whose immediate
+    subdirectories should be archived. Supports `~` for the home directory.
+  - `destination` (string, required) – directory where the zip files are
+    written. Created automatically if it does not exist. Supports `~` for the
+    home directory.

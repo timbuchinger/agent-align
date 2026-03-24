@@ -552,3 +552,88 @@ allowedTools:
 		t.Errorf("agent path not properly expanded, expected %q got %q", expectedPath, got.AllowedTools.Targets.Agents[0].Path)
 	}
 }
+
+func TestLoadArchiveTargets(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+
+	content := `mcpServers:
+  targets:
+    agents:
+      - copilot
+archiveTargets:
+  - source: ~/archives/source
+    destination: ~/archives/dest
+`
+
+	path := writeConfigFile(t, content)
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+
+	if len(got.ArchiveTargets) != 1 {
+		t.Fatalf("expected 1 archive target, got %d", len(got.ArchiveTargets))
+	}
+	expectedSource := filepath.Join(dir, "archives", "source")
+	if got.ArchiveTargets[0].Source != expectedSource {
+		t.Errorf("archive source not expanded, got %q", got.ArchiveTargets[0].Source)
+	}
+	expectedDest := filepath.Join(dir, "archives", "dest")
+	if got.ArchiveTargets[0].Destination != expectedDest {
+		t.Errorf("archive destination not expanded, got %q", got.ArchiveTargets[0].Destination)
+	}
+}
+
+func TestLoadArchiveTargetsMissingSource(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      - copilot
+archiveTargets:
+  - source: ""
+    destination: /some/dest
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for missing archive target source")
+	}
+	if !strings.Contains(err.Error(), "without a source") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadArchiveTargetsMissingDestination(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      - copilot
+archiveTargets:
+  - source: /some/source
+    destination: ""
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("expected error for missing archive target destination")
+	}
+	if !strings.Contains(err.Error(), "without a destination") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadArchiveTargetsOnlyIsValid(t *testing.T) {
+	path := writeConfigFile(t, `archiveTargets:
+  - source: /some/source
+    destination: /some/dest
+`)
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if len(got.ArchiveTargets) != 1 {
+		t.Fatalf("expected 1 archive target, got %d", len(got.ArchiveTargets))
+	}
+}

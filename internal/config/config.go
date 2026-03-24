@@ -12,9 +12,17 @@ import (
 
 // Config describes the MCP sync behavior and extra file/directory copies.
 type Config struct {
-	MCP          MCPConfig          `yaml:"mcpServers"`
-	ExtraTargets ExtraTargetsConfig `yaml:"extraTargets"`
-	AllowedTools AllowedToolsConfig `yaml:"allowedTools"`
+	MCP            MCPConfig          `yaml:"mcpServers"`
+	ExtraTargets   ExtraTargetsConfig `yaml:"extraTargets"`
+	AllowedTools   AllowedToolsConfig `yaml:"allowedTools"`
+	ArchiveTargets []ArchiveTarget    `yaml:"archiveTargets"`
+}
+
+// ArchiveTarget describes a source directory whose immediate subdirectories
+// should each be zipped and written to the destination directory.
+type ArchiveTarget struct {
+	Source      string `yaml:"source"`
+	Destination string `yaml:"destination"`
 }
 
 // MCPConfig groups the MCP definition source and the target agents.
@@ -501,10 +509,33 @@ func Load(path string) (Config, error) {
 	}
 	cfg.AllowedTools.Targets.Agents = normalizedAgents
 
+	for i := range cfg.ArchiveTargets {
+		source := strings.TrimSpace(cfg.ArchiveTargets[i].Source)
+		if source == "" {
+			return Config{}, fmt.Errorf("config at %q has an archive target without a source", path)
+		}
+		expandedSource, err := expandUserPath(source)
+		if err != nil {
+			return Config{}, fmt.Errorf("config at %q has an archive target with invalid source %q: %w", path, source, err)
+		}
+		cfg.ArchiveTargets[i].Source = expandedSource
+
+		dest := strings.TrimSpace(cfg.ArchiveTargets[i].Destination)
+		if dest == "" {
+			return Config{}, fmt.Errorf("config at %q has an archive target without a destination", path)
+		}
+		expandedDest, err := expandUserPath(dest)
+		if err != nil {
+			return Config{}, fmt.Errorf("config at %q has an archive target with invalid destination %q: %w", path, dest, err)
+		}
+		cfg.ArchiveTargets[i].Destination = expandedDest
+	}
+
 	if len(cfg.MCP.Targets.Agents) == 0 &&
 		len(cfg.MCP.Targets.Additional.JSON) == 0 &&
 		len(cfg.MCP.Targets.Additional.JSONC) == 0 &&
-		cfg.ExtraTargets.IsZero() {
+		cfg.ExtraTargets.IsZero() &&
+		len(cfg.ArchiveTargets) == 0 {
 		return Config{}, fmt.Errorf("config at %q must define at least one target", path)
 	}
 
