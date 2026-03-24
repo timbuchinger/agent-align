@@ -83,6 +83,7 @@ func main() {
 	var additionalTargets []config.AdditionalJSONTarget
 	var additionalJSONCTargets []config.AdditionalJSONTarget
 	var extraTargets config.ExtraTargetsConfig
+	var archiveTargets []config.ArchiveTarget
 	var targetAgents []syncer.AgentTarget
 
 	if agentsFlagValue == "" {
@@ -108,6 +109,7 @@ func main() {
 		additionalTargets = cfg.MCP.Targets.Additional.JSON
 		additionalJSONCTargets = cfg.MCP.Targets.Additional.JSONC
 		extraTargets = cfg.ExtraTargets
+		archiveTargets = cfg.ArchiveTargets
 		targetAgents = configTargetsToSyncer(cfg.MCP.Targets.Agents)
 		if resolvedMCPPath == "" {
 			resolvedMCPPath = cfg.MCP.ConfigPath
@@ -137,7 +139,7 @@ func main() {
 		}
 	}
 
-	if len(targetAgents) == 0 && len(additionalTargets) == 0 && len(additionalJSONCTargets) == 0 && extraTargets.IsZero() {
+	if len(targetAgents) == 0 && len(additionalTargets) == 0 && len(additionalJSONCTargets) == 0 && extraTargets.IsZero() && len(archiveTargets) == 0 {
 		log.Fatal("no target agents, additional destinations, or extra copy targets configured; provide agents via config/flags or add extra targets")
 	}
 
@@ -257,6 +259,16 @@ func main() {
 				}
 				fmt.Printf("    - %s\n", label)
 			}
+			fmt.Println()
+		}
+	}
+
+	// Display archive targets if configured
+	if len(archiveTargets) > 0 {
+		fmt.Println("Archive targets:")
+		for _, target := range archiveTargets {
+			fmt.Printf("  Source: %s\n", target.Source)
+			fmt.Printf("  Destination: %s\n", target.Destination)
 			fmt.Println()
 		}
 	}
@@ -412,6 +424,16 @@ func main() {
 		if flattened {
 			fmt.Println("    Applied flatten to some destinations")
 		}
+	}
+	for _, target := range archiveTargets {
+		count, err := archiveSubdirectories(target)
+		if err != nil {
+			msg := fmt.Sprintf("error archiving %s: %v", target.Source, err)
+			log.Print(msg)
+			applyErrors = append(applyErrors, msg)
+			continue
+		}
+		fmt.Printf("  Archived: %s -> %s (%d zip files)\n", target.Source, target.Destination, count)
 	}
 	fmt.Println("\nConfiguration sync complete.")
 

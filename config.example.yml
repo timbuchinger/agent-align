@@ -60,3 +60,7 @@ allowedTools:
       - name: codex
         path: ~/.codex/rules/agent-align.rules # custom path; defaults to ~/.codex/instructions.md
 
+archiveTargets:
+  - source: /path/to/source
+    destination: /path/to/destination
+
