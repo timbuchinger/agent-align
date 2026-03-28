@@ -90,7 +90,7 @@ func main() {
 			log.Fatalf("failed to export allowed tools: %v", err)
 		}
 		for _, tool := range tools {
-			fmt.Println(tool)
+			fmt.Println("- " + tool)
 		}
 		return
 	}
