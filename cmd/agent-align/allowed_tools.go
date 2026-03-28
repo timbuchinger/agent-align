@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"agent-align/internal/config"
@@ -193,6 +194,154 @@ func generateCodexRules(cfg config.Config) error {
 	}
 
 	return nil
+}
+
+// convertClaudePermissionToTool converts a Claude permission string like
+// "Bash(git fetch:*)" back to the common tool format "shell(git fetch)".
+func convertClaudePermissionToTool(permission string) string {
+	if strings.HasPrefix(permission, "Bash(") && strings.HasSuffix(permission, ":*)") {
+		inner := permission[len("Bash(") : len(permission)-3]
+		return "shell(" + inner + ")"
+	}
+	return permission
+}
+
+// convertCodexRuleToTool converts a Codex prefix_rule string like
+// `prefix_rule(pattern=["git", "fetch"], decision="allow")`
+// back to the common tool format "shell(git fetch)".
+func convertCodexRuleToTool(rule string) string {
+	const prefix = `prefix_rule(pattern=[`
+	if !strings.HasPrefix(rule, prefix) {
+		return rule
+	}
+	rest := rule[len(prefix):]
+	endBracket := strings.Index(rest, "]")
+	if endBracket < 0 {
+		return rule
+	}
+	inner := rest[:endBracket]
+	var parts []string
+	for _, part := range strings.Split(inner, ",") {
+		part = strings.TrimSpace(part)
+		part = strings.Trim(part, `"`)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) == 0 {
+		return rule
+	}
+	return "shell(" + strings.Join(parts, " ") + ")"
+}
+
+// importClaudeTools reads a Claude settings.json file and returns the allowed
+// tools in the common "shell(...)" format. If the file does not exist a warning
+// is logged and nil is returned.
+func importClaudeTools(settingsPath string) ([]string, error) {
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("Warning: Claude settings file not found at %s", settingsPath)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read Claude settings %s: %w", settingsPath, err)
+	}
+
+	var settings map[string]interface{}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil, fmt.Errorf("failed to parse Claude settings %s: %w", settingsPath, err)
+	}
+
+	permissions, _ := settings["permissions"].(map[string]interface{})
+	if permissions == nil {
+		return nil, nil
+	}
+
+	allow, _ := permissions["allow"].([]interface{})
+	var tools []string
+	for _, item := range allow {
+		if s, ok := item.(string); ok {
+			tools = append(tools, convertClaudePermissionToTool(s))
+		}
+	}
+	return tools, nil
+}
+
+// importCodexTools reads a Codex instructions file and returns the allowed tools
+// in the common "shell(...)" format. If the file does not exist a warning is
+// logged and nil is returned.
+func importCodexTools(rulesPath string) ([]string, error) {
+	data, err := os.ReadFile(rulesPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Printf("Warning: Codex rules file not found at %s", rulesPath)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read Codex rules %s: %w", rulesPath, err)
+	}
+
+	var tools []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "prefix_rule(") {
+			tools = append(tools, convertCodexRuleToTool(line))
+		}
+	}
+	return tools, nil
+}
+
+// collectAllowedTools reads the allowed-tools files referenced by each Claude
+// and Codex target in cfg, combines the results, deduplicates, and sorts them
+// alphabetically. Copilot targets are skipped.
+func collectAllowedTools(cfg config.Config) ([]string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	seen := make(map[string]struct{})
+	var tools []string
+
+	for _, agent := range cfg.AllowedTools.Targets.Agents {
+		var agentTools []string
+		var importErr error
+
+		switch agent.Name {
+		case "claude":
+			settingsPath := filepath.Join(homeDir, ".claude", "settings.json")
+			if agent.Path != "" {
+				settingsPath = agent.Path
+			}
+			agentTools, importErr = importClaudeTools(settingsPath)
+		case "codex":
+			rulesPath := filepath.Join(homeDir, ".codex", "instructions.md")
+			if agent.Path != "" {
+				rulesPath = agent.Path
+			}
+			agentTools, importErr = importCodexTools(rulesPath)
+		default:
+			// Copilot and any other agents are intentionally skipped.
+			continue
+		}
+
+		if importErr != nil {
+			log.Printf("Warning: failed to import tools from %s: %v", agent.Name, importErr)
+			continue
+		}
+
+		for _, tool := range agentTools {
+			if _, exists := seen[tool]; !exists {
+				seen[tool] = struct{}{}
+				tools = append(tools, tool)
+			}
+		}
+	}
+
+	sort.Strings(tools)
+	return tools, nil
 }
 
 // buildWrapperScript generates the shell script content for the copilot wrapper.

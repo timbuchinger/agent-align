@@ -54,6 +54,7 @@ func main() {
 	debug := flag.Bool("debug", false, "print shell commands to test each MCP server and exit")
 	confirm := flag.Bool("confirm", false, "skip user confirmation prompt (useful for cron jobs)")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	exportAllowedToolsFlag := flag.Bool("export-allowed-tools", false, "read allowed tools from the configured target files and print a combined, sorted, deduplicated list")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "agent-align version %s\n\n", version)
@@ -77,6 +78,22 @@ func main() {
 	resolvedConfigPath := *configPath
 	resolvedMCPPath := strings.TrimSpace(*mcpConfigPath)
 	agentsFlagValue := strings.TrimSpace(*agents)
+
+	// Handle -export-allowed-tools independently of the normal sync flow.
+	if *exportAllowedToolsFlag {
+		data, err := config.Load(resolvedConfigPath)
+		if err != nil {
+			log.Fatalf("failed to load config %q: %v", resolvedConfigPath, err)
+		}
+		tools, err := collectAllowedTools(data)
+		if err != nil {
+			log.Fatalf("failed to export allowed tools: %v", err)
+		}
+		for _, tool := range tools {
+			fmt.Println(tool)
+		}
+		return
+	}
 
 	var cfg config.Config
 	var haveConfig bool

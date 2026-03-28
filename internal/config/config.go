@@ -535,7 +535,8 @@ func Load(path string) (Config, error) {
 		len(cfg.MCP.Targets.Additional.JSON) == 0 &&
 		len(cfg.MCP.Targets.Additional.JSONC) == 0 &&
 		cfg.ExtraTargets.IsZero() &&
-		len(cfg.ArchiveTargets) == 0 {
+		len(cfg.ArchiveTargets) == 0 &&
+		len(cfg.AllowedTools.Targets.Agents) == 0 {
 		return Config{}, fmt.Errorf("config at %q must define at least one target", path)
 	}
 
