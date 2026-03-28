@@ -209,12 +209,21 @@ func convertClaudePermissionToTool(permission string) string {
 // convertCodexRuleToTool converts a Codex prefix_rule string like
 // `prefix_rule(pattern=["git", "fetch"], decision="allow")`
 // back to the common tool format "shell(git fetch)".
+// It tolerates optional whitespace around the `=` sign.
 func convertCodexRuleToTool(rule string) string {
-	const prefix = `prefix_rule(pattern=[`
-	if !strings.HasPrefix(rule, prefix) {
+	if !strings.HasPrefix(rule, "prefix_rule(") {
 		return rule
 	}
-	rest := rule[len(prefix):]
+	// Normalize whitespace around '=' to handle variants like
+	// `pattern = [` in addition to the canonical `pattern=[`.
+	normalized := strings.ReplaceAll(rule, " = ", "=")
+	normalized = strings.ReplaceAll(normalized, " =", "=")
+	normalized = strings.ReplaceAll(normalized, "= ", "=")
+	const prefix = `prefix_rule(pattern=[`
+	if !strings.HasPrefix(normalized, prefix) {
+		return rule
+	}
+	rest := normalized[len(prefix):]
 	endBracket := strings.Index(rest, "]")
 	if endBracket < 0 {
 		return rule

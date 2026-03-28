@@ -379,6 +379,9 @@ func TestConvertCodexRuleToTool(t *testing.T) {
 		{"plaintext", "plaintext"},
 		// Malformed (no closing bracket) should be returned unchanged.
 		{`prefix_rule(pattern=["git", "fetch"`, `prefix_rule(pattern=["git", "fetch"`},
+		// Whitespace variants (spaces around '=') should be handled correctly.
+		{`prefix_rule(pattern = ["gh", "pr", "view"],decision = "allow")`, "shell(gh pr view)"},
+		{`prefix_rule(pattern = ["git", "fetch"], decision = "allow")`, "shell(git fetch)"},
 	}
 
 	for _, tt := range tests {
@@ -564,6 +567,31 @@ func TestImportCodexToolsReadsRules(t *testing.T) {
 	}
 	if tools[1] != "shell(npm install --save)" {
 		t.Errorf("expected shell(npm install --save), got %q", tools[1])
+	}
+}
+
+func TestImportCodexToolsHandlesSpacesAroundEquals(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "agent-align.rules")
+	// Simulate a rules file written with spaces around '=' as described in the issue.
+	content := `prefix_rule(pattern = ["gh", "pr", "view"],decision = "allow")` + "\n" +
+		`prefix_rule(pattern = ["git", "fetch"], decision = "allow")` + "\n"
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	tools, err := importCodexTools(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d: %v", len(tools), tools)
+	}
+	if tools[0] != "shell(gh pr view)" {
+		t.Errorf("expected shell(gh pr view), got %q", tools[0])
+	}
+	if tools[1] != "shell(git fetch)" {
+		t.Errorf("expected shell(git fetch), got %q", tools[1])
 	}
 }
 
