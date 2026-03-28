@@ -55,6 +55,7 @@ func main() {
 	confirm := flag.Bool("confirm", false, "skip user confirmation prompt (useful for cron jobs)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	exportAllowedToolsFlag := flag.Bool("export-allowed-tools", false, "read allowed tools from the configured target files and print a combined, sorted, deduplicated list")
+	updateAllowedToolsFlag := flag.Bool("update-allowed-tools", false, "read allowed tools from the configured target files and overwrite the allowedTools list in the config file")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "agent-align version %s\n\n", version)
@@ -92,6 +93,38 @@ func main() {
 		for _, tool := range tools {
 			fmt.Println("- " + tool)
 		}
+		return
+	}
+
+	// Handle -update-allowed-tools: collect tools and overwrite the config.
+	if *updateAllowedToolsFlag {
+		data, err := config.Load(resolvedConfigPath)
+		if err != nil {
+			log.Fatalf("failed to load config %q: %v", resolvedConfigPath, err)
+		}
+		tools, err := collectAllowedTools(data)
+		if err != nil {
+			log.Fatalf("failed to collect allowed tools: %v", err)
+		}
+		fmt.Printf("The following allowed tools will be written to %s:\n", resolvedConfigPath)
+		if len(tools) == 0 {
+			fmt.Println("  (none)")
+		} else {
+			for _, tool := range tools {
+				fmt.Println("  - " + tool)
+			}
+		}
+		fmt.Println()
+		if !*confirm {
+			if !promptUser("Apply these changes? [y/N]: ", false) {
+				fmt.Println("Changes cancelled.")
+				return
+			}
+		}
+		if err := config.UpdateAllowedTools(resolvedConfigPath, tools); err != nil {
+			log.Fatalf("failed to update allowed tools in config: %v", err)
+		}
+		fmt.Printf("Updated allowedTools in %s\n", resolvedConfigPath)
 		return
 	}
 

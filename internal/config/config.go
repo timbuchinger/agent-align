@@ -619,3 +619,86 @@ func (e ExtraTargetsConfig) IsZero() bool {
 func (a AdditionalTargets) IsZero() bool {
 	return len(a.JSON) == 0 && len(a.JSONC) == 0
 }
+
+// UpdateAllowedTools updates only the allowedTools.alwaysAllowedTools field in
+// the YAML config file at path, replacing it with the given tools list. All
+// other fields and comments in the file are preserved. Returns an error if the
+// allowedTools section does not exist in the config file.
+func UpdateAllowedTools(path string, tools []string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read config %q: %w", path, err)
+	}
+
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("failed to parse config %q: %w", path, err)
+	}
+
+	if root.Kind != yaml.DocumentNode || len(root.Content) == 0 {
+		return fmt.Errorf("unexpected YAML structure in %q", path)
+	}
+	doc := root.Content[0]
+
+	// Build the new sequence node for alwaysAllowedTools.
+	newSeq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Style: 0}
+	for _, tool := range tools {
+		newSeq.Content = append(newSeq.Content, &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: tool,
+			Tag:   "!!str",
+		})
+	}
+
+	// Find the allowedTools mapping node.
+	allowedToolsNode := findMappingValue(doc, "allowedTools")
+	if allowedToolsNode == nil {
+		return fmt.Errorf("config %q does not contain an allowedTools section", path)
+	}
+
+	// Try to update an existing alwaysAllowedTools key within allowedTools.
+	if !replaceNodeValue(allowedToolsNode, "alwaysAllowedTools", newSeq) {
+		// Key doesn't exist yet; insert it at the start of the mapping.
+		keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: "alwaysAllowedTools", Tag: "!!str"}
+		allowedToolsNode.Content = append([]*yaml.Node{keyNode, newSeq}, allowedToolsNode.Content...)
+	}
+
+	out, err := yaml.Marshal(&root)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated config: %w", err)
+	}
+
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		return fmt.Errorf("failed to write config %q: %w", path, err)
+	}
+	return nil
+}
+
+// findMappingValue searches a YAML mapping node for the given key and returns
+// the associated value node, or nil if not found.
+func findMappingValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return node.Content[i+1]
+		}
+	}
+	return nil
+}
+
+// replaceNodeValue searches a YAML mapping node for the given key and replaces
+// its value with newValue. Returns true if the key was found and replaced.
+func replaceNodeValue(node *yaml.Node, key string, newValue *yaml.Node) bool {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			node.Content[i+1] = newValue
+			return true
+		}
+	}
+	return false
+}
