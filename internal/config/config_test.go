@@ -72,6 +72,22 @@ func TestLoadRejectsMissingTargets(t *testing.T) {
 	}
 }
 
+func TestLoadAcceptsAllowedToolsOnlyConfig(t *testing.T) {
+	path := writeConfigFile(t, `allowedTools:
+  targets:
+    agents:
+      - name: claude
+        path: /tmp/settings.json
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("expected config with only allowedTools targets to be valid, got: %v", err)
+	}
+	if len(cfg.AllowedTools.Targets.Agents) != 1 {
+		t.Fatalf("expected 1 allowed tools agent, got %d", len(cfg.AllowedTools.Targets.Agents))
+	}
+}
+
 func TestLoadRejectsInvalidAdditionalTarget(t *testing.T) {
 	path := writeConfigFile(t, `mcpServers:
   targets:

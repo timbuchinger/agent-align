@@ -340,6 +340,428 @@ func TestGenerateCodexRulesOverwritesFile(t *testing.T) {
 	}
 }
 
+func TestConvertClaudePermissionToTool(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Bash(git fetch:*)", "shell(git fetch)"},
+		{"Bash(git pull:*)", "shell(git pull)"},
+		{"Bash(npm install:*)", "shell(npm install)"},
+		{"Bash(npm install --save:*)", "shell(npm install --save)"},
+		// Non-matching strings should be returned unchanged.
+		{"other(tool)", "other(tool)"},
+		{"plaintext", "plaintext"},
+		// Bash without the trailing :*) should not be converted.
+		{"Bash(git fetch)", "Bash(git fetch)"},
+	}
+
+	for _, tt := range tests {
+		got := convertClaudePermissionToTool(tt.input)
+		if got != tt.expected {
+			t.Errorf("convertClaudePermissionToTool(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestConvertCodexRuleToTool(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`prefix_rule(pattern=["git", "fetch"], decision="allow")`, "shell(git fetch)"},
+		{`prefix_rule(pattern=["git", "pull"], decision="allow")`, "shell(git pull)"},
+		{`prefix_rule(pattern=["npm", "install", "--save"], decision="allow")`, "shell(npm install --save)"},
+		// Single-word command.
+		{`prefix_rule(pattern=["make"], decision="allow")`, "shell(make)"},
+		// Non-matching strings should be returned unchanged.
+		{"other(tool)", "other(tool)"},
+		{"plaintext", "plaintext"},
+		// Malformed (no closing bracket) should be returned unchanged.
+		{`prefix_rule(pattern=["git", "fetch"`, `prefix_rule(pattern=["git", "fetch"`},
+	}
+
+	for _, tt := range tests {
+		got := convertCodexRuleToTool(tt.input)
+		if got != tt.expected {
+			t.Errorf("convertCodexRuleToTool(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestImportClaudeToolsFileNotFound(t *testing.T) {
+	dir := t.TempDir()
+	tools, err := importClaudeTools(filepath.Join(dir, "nonexistent.json"))
+	if err != nil {
+		t.Errorf("expected nil error for missing file, got: %v", err)
+	}
+	if tools != nil {
+		t.Errorf("expected nil tools for missing file, got: %v", tools)
+	}
+}
+
+func TestImportClaudeToolsInvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(p, []byte("not json"), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	_, err := importClaudeTools(p)
+	if err == nil {
+		t.Error("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestImportClaudeToolsNoPermissions(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "settings.json")
+	data, _ := json.Marshal(map[string]interface{}{"theme": "dark"})
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	tools, err := importClaudeTools(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 0 {
+		t.Errorf("expected no tools when permissions node is absent, got: %v", tools)
+	}
+}
+
+func TestImportClaudeToolsNoAllowList(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "settings.json")
+	data, _ := json.Marshal(map[string]interface{}{
+		"permissions": map[string]interface{}{"deny": []string{"Bash(rm:*)"}},
+	})
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	tools, err := importClaudeTools(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 0 {
+		t.Errorf("expected no tools when allow list is absent, got: %v", tools)
+	}
+}
+
+func TestImportClaudeToolsReadsPermissions(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "settings.json")
+	settings := map[string]interface{}{
+		"theme": "dark",
+		"permissions": map[string]interface{}{
+			"allow": []string{"Bash(git fetch:*)", "Bash(git pull:*)"},
+		},
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	tools, err := importClaudeTools(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d: %v", len(tools), tools)
+	}
+	if tools[0] != "shell(git fetch)" {
+		t.Errorf("expected shell(git fetch), got %q", tools[0])
+	}
+	if tools[1] != "shell(git pull)" {
+		t.Errorf("expected shell(git pull), got %q", tools[1])
+	}
+}
+
+func TestImportClaudeToolsUnknownPermissionsPassedThrough(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "settings.json")
+	settings := map[string]interface{}{
+		"permissions": map[string]interface{}{
+			"allow": []string{"mcp__github__create_issue"},
+		},
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	if err := os.WriteFile(p, data, 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	tools, err := importClaudeTools(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 1 || tools[0] != "mcp__github__create_issue" {
+		t.Errorf("expected unknown permission to pass through, got: %v", tools)
+	}
+}
+
+func TestImportCodexToolsFileNotFound(t *testing.T) {
+	dir := t.TempDir()
+	tools, err := importCodexTools(filepath.Join(dir, "nonexistent.md"))
+	if err != nil {
+		t.Errorf("expected nil error for missing file, got: %v", err)
+	}
+	if tools != nil {
+		t.Errorf("expected nil tools for missing file, got: %v", tools)
+	}
+}
+
+func TestImportCodexToolsEmptyFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "instructions.md")
+	if err := os.WriteFile(p, []byte(""), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	tools, err := importCodexTools(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 0 {
+		t.Errorf("expected no tools for empty file, got: %v", tools)
+	}
+}
+
+func TestImportCodexToolsIgnoresNonRuleLines(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "instructions.md")
+	content := "# Some heading\n\nSome prose text.\n\n" +
+		`prefix_rule(pattern=["git", "fetch"], decision="allow")` + "\n"
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	tools, err := importCodexTools(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d: %v", len(tools), tools)
+	}
+	if tools[0] != "shell(git fetch)" {
+		t.Errorf("expected shell(git fetch), got %q", tools[0])
+	}
+}
+
+func TestImportCodexToolsReadsRules(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "instructions.md")
+	content := `prefix_rule(pattern=["git", "fetch"], decision="allow")` + "\n" +
+		`prefix_rule(pattern=["npm", "install", "--save"], decision="allow")` + "\n"
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	tools, err := importCodexTools(p)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d: %v", len(tools), tools)
+	}
+	if tools[0] != "shell(git fetch)" {
+		t.Errorf("expected shell(git fetch), got %q", tools[0])
+	}
+	if tools[1] != "shell(npm install --save)" {
+		t.Errorf("expected shell(npm install --save), got %q", tools[1])
+	}
+}
+
+func TestCollectAllowedToolsNoClaude(t *testing.T) {
+	cfg := config.Config{
+		AllowedTools: config.AllowedToolsConfig{
+			Targets: config.AllowedToolsTargets{
+				Agents: []config.AllowedToolsAgent{},
+			},
+		},
+	}
+	tools, err := collectAllowedTools(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 0 {
+		t.Errorf("expected no tools, got: %v", tools)
+	}
+}
+
+func TestCollectAllowedToolsSkipsCopilot(t *testing.T) {
+	dir := t.TempDir()
+	// A Codex file with one tool.
+	codexPath := filepath.Join(dir, "instructions.md")
+	if err := os.WriteFile(codexPath, []byte(`prefix_rule(pattern=["git", "fetch"], decision="allow")`+"\n"), 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	cfg := config.Config{
+		AllowedTools: config.AllowedToolsConfig{
+			Targets: config.AllowedToolsTargets{
+				Agents: []config.AllowedToolsAgent{
+					{Name: "copilot", Path: dir}, // should be skipped
+					{Name: "codex", Path: codexPath},
+				},
+			},
+		},
+	}
+	tools, err := collectAllowedTools(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 1 || tools[0] != "shell(git fetch)" {
+		t.Errorf("expected [shell(git fetch)], got: %v", tools)
+	}
+}
+
+func TestCollectAllowedToolsMergesAndDeduplicates(t *testing.T) {
+	dir := t.TempDir()
+
+	// Claude settings with two tools, one duplicate.
+	claudePath := filepath.Join(dir, "settings.json")
+	settings := map[string]interface{}{
+		"permissions": map[string]interface{}{
+			"allow": []string{"Bash(git fetch:*)", "Bash(git pull:*)"},
+		},
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	if err := os.WriteFile(claudePath, data, 0o644); err != nil {
+		t.Fatalf("failed to write claude file: %v", err)
+	}
+
+	// Codex file with one overlapping tool and one new tool.
+	codexPath := filepath.Join(dir, "instructions.md")
+	content := `prefix_rule(pattern=["git", "fetch"], decision="allow")` + "\n" +
+		`prefix_rule(pattern=["npm", "install"], decision="allow")` + "\n"
+	if err := os.WriteFile(codexPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write codex file: %v", err)
+	}
+
+	cfg := config.Config{
+		AllowedTools: config.AllowedToolsConfig{
+			Targets: config.AllowedToolsTargets{
+				Agents: []config.AllowedToolsAgent{
+					{Name: "claude", Path: claudePath},
+					{Name: "codex", Path: codexPath},
+				},
+			},
+		},
+	}
+
+	tools, err := collectAllowedTools(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Expected: 3 unique tools sorted alphabetically.
+	expected := []string{"shell(git fetch)", "shell(git pull)", "shell(npm install)"}
+	if len(tools) != len(expected) {
+		t.Fatalf("expected %d tools, got %d: %v", len(expected), len(tools), tools)
+	}
+	for i, want := range expected {
+		if tools[i] != want {
+			t.Errorf("tools[%d] = %q, want %q", i, tools[i], want)
+		}
+	}
+}
+
+func TestCollectAllowedToolsSortedAlphabetically(t *testing.T) {
+	dir := t.TempDir()
+
+	claudePath := filepath.Join(dir, "settings.json")
+	settings := map[string]interface{}{
+		"permissions": map[string]interface{}{
+			"allow": []string{"Bash(npm install:*)", "Bash(git fetch:*)", "Bash(go build:*)"},
+		},
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	if err := os.WriteFile(claudePath, data, 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	cfg := config.Config{
+		AllowedTools: config.AllowedToolsConfig{
+			Targets: config.AllowedToolsTargets{
+				Agents: []config.AllowedToolsAgent{
+					{Name: "claude", Path: claudePath},
+				},
+			},
+		},
+	}
+
+	tools, err := collectAllowedTools(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []string{"shell(git fetch)", "shell(go build)", "shell(npm install)"}
+	if len(tools) != len(expected) {
+		t.Fatalf("expected %d tools, got %d: %v", len(expected), len(tools), tools)
+	}
+	for i, want := range expected {
+		if tools[i] != want {
+			t.Errorf("tools[%d] = %q, want %q", i, tools[i], want)
+		}
+	}
+}
+
+func TestCollectAllowedToolsMissingFilesLogWarning(t *testing.T) {
+	dir := t.TempDir()
+	// Both paths point to nonexistent files; should not error.
+	cfg := config.Config{
+		AllowedTools: config.AllowedToolsConfig{
+			Targets: config.AllowedToolsTargets{
+				Agents: []config.AllowedToolsAgent{
+					{Name: "claude", Path: filepath.Join(dir, "no-settings.json")},
+					{Name: "codex", Path: filepath.Join(dir, "no-instructions.md")},
+				},
+			},
+		},
+	}
+	tools, err := collectAllowedTools(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error for missing files: %v", err)
+	}
+	if len(tools) != 0 {
+		t.Errorf("expected no tools when all files are missing, got: %v", tools)
+	}
+}
+
+func TestCollectAllowedToolsDefaultPathsUsedWhenNoPathSet(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+
+	// Write a Claude settings file at the default location.
+	claudeDir := filepath.Join(dir, ".claude")
+	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
+		t.Fatalf("failed to create .claude dir: %v", err)
+	}
+	settings := map[string]interface{}{
+		"permissions": map[string]interface{}{
+			"allow": []string{"Bash(git fetch:*)"},
+		},
+	}
+	data, _ := json.MarshalIndent(settings, "", "  ")
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.json"), data, 0o644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	cfg := config.Config{
+		AllowedTools: config.AllowedToolsConfig{
+			Targets: config.AllowedToolsTargets{
+				Agents: []config.AllowedToolsAgent{
+					{Name: "claude"}, // no explicit path → uses default
+				},
+			},
+		},
+	}
+
+	tools, err := collectAllowedTools(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tools) != 1 || tools[0] != "shell(git fetch)" {
+		t.Errorf("expected [shell(git fetch)], got: %v", tools)
+	}
+}
+
 func TestGenerateCopilotWrapperSkipsNonCopilotAgents(t *testing.T) {
 	dir := t.TempDir()
 	claudePath := filepath.Join(dir, "settings.json")
