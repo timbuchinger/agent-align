@@ -653,3 +653,128 @@ func TestLoadArchiveTargetsOnlyIsValid(t *testing.T) {
 		t.Fatalf("expected 1 archive target, got %d", len(got.ArchiveTargets))
 	}
 }
+
+func TestUpdateAllowedToolsReplacesExistingList(t *testing.T) {
+	path := writeConfigFile(t, `allowedTools:
+  alwaysAllowedTools:
+    - shell(git fetch)
+    - shell(git pull)
+  targets:
+    agents:
+      - name: claude
+`)
+
+	newTools := []string{"shell(npm install)", "shell(git status)"}
+	if err := UpdateAllowedTools(path, newTools); err != nil {
+		t.Fatalf("UpdateAllowedTools returned error: %v", err)
+	}
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after UpdateAllowedTools returned error: %v", err)
+	}
+	if len(got.AllowedTools.AlwaysAllowedTools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(got.AllowedTools.AlwaysAllowedTools))
+	}
+	if got.AllowedTools.AlwaysAllowedTools[0] != "shell(npm install)" {
+		t.Errorf("expected shell(npm install), got %q", got.AllowedTools.AlwaysAllowedTools[0])
+	}
+	if got.AllowedTools.AlwaysAllowedTools[1] != "shell(git status)" {
+		t.Errorf("expected shell(git status), got %q", got.AllowedTools.AlwaysAllowedTools[1])
+	}
+	// Verify that other sections are preserved.
+	if len(got.AllowedTools.Targets.Agents) != 1 || got.AllowedTools.Targets.Agents[0].Name != "claude" {
+		t.Errorf("targets agents should be preserved, got %+v", got.AllowedTools.Targets.Agents)
+	}
+}
+
+func TestUpdateAllowedToolsCreatesKeyWhenMissing(t *testing.T) {
+	path := writeConfigFile(t, `allowedTools:
+  targets:
+    agents:
+      - name: codex
+`)
+
+	newTools := []string{"shell(git fetch)"}
+	if err := UpdateAllowedTools(path, newTools); err != nil {
+		t.Fatalf("UpdateAllowedTools returned error: %v", err)
+	}
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after UpdateAllowedTools returned error: %v", err)
+	}
+	if len(got.AllowedTools.AlwaysAllowedTools) != 1 || got.AllowedTools.AlwaysAllowedTools[0] != "shell(git fetch)" {
+		t.Errorf("expected [shell(git fetch)], got %v", got.AllowedTools.AlwaysAllowedTools)
+	}
+}
+
+func TestUpdateAllowedToolsWithEmptyList(t *testing.T) {
+	path := writeConfigFile(t, `allowedTools:
+  alwaysAllowedTools:
+    - shell(git fetch)
+  targets:
+    agents:
+      - name: claude
+`)
+
+	if err := UpdateAllowedTools(path, []string{}); err != nil {
+		t.Fatalf("UpdateAllowedTools returned error: %v", err)
+	}
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after UpdateAllowedTools returned error: %v", err)
+	}
+	if len(got.AllowedTools.AlwaysAllowedTools) != 0 {
+		t.Errorf("expected empty tools list, got %v", got.AllowedTools.AlwaysAllowedTools)
+	}
+}
+
+func TestUpdateAllowedToolsErrorsWhenSectionMissing(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      - copilot
+`)
+
+	err := UpdateAllowedTools(path, []string{"shell(git fetch)"})
+	if err == nil {
+		t.Fatal("expected error when allowedTools section is missing")
+	}
+	if !strings.Contains(err.Error(), "allowedTools") {
+		t.Fatalf("error should mention allowedTools, got: %v", err)
+	}
+}
+
+func TestUpdateAllowedToolsPreservesOtherSections(t *testing.T) {
+	path := writeConfigFile(t, `mcpServers:
+  targets:
+    agents:
+      - copilot
+allowedTools:
+  alwaysAllowedTools:
+    - shell(git fetch)
+  targets:
+    agents:
+      - name: claude
+`)
+
+	newTools := []string{"shell(npm test)"}
+	if err := UpdateAllowedTools(path, newTools); err != nil {
+		t.Fatalf("UpdateAllowedTools returned error: %v", err)
+	}
+
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after UpdateAllowedTools returned error: %v", err)
+	}
+	// MCP section should be intact.
+	if len(got.MCP.Targets.Agents) != 1 || got.MCP.Targets.Agents[0].Name != "copilot" {
+		t.Errorf("MCP targets should be preserved, got %+v", got.MCP.Targets.Agents)
+	}
+	// allowedTools should be updated.
+	if len(got.AllowedTools.AlwaysAllowedTools) != 1 || got.AllowedTools.AlwaysAllowedTools[0] != "shell(npm test)" {
+		t.Errorf("expected [shell(npm test)], got %v", got.AllowedTools.AlwaysAllowedTools)
+	}
+}
