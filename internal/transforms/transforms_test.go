@@ -433,6 +433,120 @@ func TestCodexTransformer_NonMapServer(t *testing.T) {
 	}
 }
 
+func TestCodexTransformer_AlwaysAllowConvertsToToolsMap(t *testing.T) {
+	transformer := &CodexTransformer{}
+	servers := map[string]interface{}{
+		"myserver": map[string]interface{}{
+			"command": "uvx",
+			"args":    []interface{}{"mcp-server"},
+			"alwaysAllow": []interface{}{
+				"tool_a",
+				"tool_b",
+			},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	server := servers["myserver"].(map[string]interface{})
+
+	// alwaysAllow should be removed
+	if _, exists := server["alwaysAllow"]; exists {
+		t.Error("alwaysAllow should be removed after transformation")
+	}
+
+	// tools should be set as a nested map
+	toolsRaw, exists := server["tools"]
+	if !exists {
+		t.Fatal("tools field should be added")
+	}
+	tools, ok := toolsRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("tools should be a map, got %T", toolsRaw)
+	}
+
+	for _, toolName := range []string{"tool_a", "tool_b"} {
+		toolRaw, exists := tools[toolName]
+		if !exists {
+			t.Errorf("tools map should contain %q", toolName)
+			continue
+		}
+		toolConfig, ok := toolRaw.(map[string]interface{})
+		if !ok {
+			t.Errorf("tools[%q] should be a map, got %T", toolName, toolRaw)
+			continue
+		}
+		if toolConfig["approval_mode"] != "approve" {
+			t.Errorf("tools[%q].approval_mode should be \"approve\", got %v", toolName, toolConfig["approval_mode"])
+		}
+	}
+}
+
+func TestCodexTransformer_EmptyAlwaysAllowDoesNotAddTools(t *testing.T) {
+	transformer := &CodexTransformer{}
+	servers := map[string]interface{}{
+		"myserver": map[string]interface{}{
+			"command":     "uvx",
+			"alwaysAllow": []interface{}{},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	server := servers["myserver"].(map[string]interface{})
+
+	if _, exists := server["alwaysAllow"]; exists {
+		t.Error("alwaysAllow should be removed even when empty")
+	}
+	if _, exists := server["tools"]; exists {
+		t.Error("tools should not be added when alwaysAllow is empty")
+	}
+}
+
+func TestCodexTransformer_AlwaysAllowAndHeadersTogether(t *testing.T) {
+	transformer := &CodexTransformer{}
+	servers := map[string]interface{}{
+		"myserver": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "https://api.example.test",
+			"headers": map[string]interface{}{
+				"X-API-Key": "secret",
+			},
+			"alwaysAllow": []interface{}{"search", "read"},
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	server := servers["myserver"].(map[string]interface{})
+
+	// alwaysAllow removed, tools added
+	if _, exists := server["alwaysAllow"]; exists {
+		t.Error("alwaysAllow should be removed")
+	}
+	tools, ok := server["tools"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("tools should be a map, got %T", server["tools"])
+	}
+	if len(tools) != 2 {
+		t.Errorf("expected 2 tools, got %d", len(tools))
+	}
+
+	// headers renamed to http_headers
+	if _, exists := server["headers"]; exists {
+		t.Error("headers field should be removed")
+	}
+	if _, exists := server["http_headers"]; !exists {
+		t.Error("http_headers should be present")
+	}
+}
+
 func TestGeminiTransformer_RemovesUnsupportedFields(t *testing.T) {
 	transformer := &GeminiTransformer{}
 	servers := map[string]interface{}{
