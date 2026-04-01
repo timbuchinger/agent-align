@@ -821,3 +821,61 @@ func TestGenerateCopilotWrapperSkipsNonCopilotAgents(t *testing.T) {
 		t.Error("generateCopilotWrapper should not create files for codex agents")
 	}
 }
+
+func TestMergeAllowedToolsCombinesAndDeduplicates(t *testing.T) {
+	collected := []string{"shell(git fetch)", "shell(npm install)"}
+	existing := []string{"shell(git pull)", "shell(git fetch)"} // git fetch is duplicate
+
+	result := mergeAllowedTools(collected, existing)
+
+	expected := []string{"shell(git fetch)", "shell(git pull)", "shell(npm install)"}
+	if len(result) != len(expected) {
+		t.Fatalf("expected %d tools, got %d: %v", len(expected), len(result), result)
+	}
+	for i, want := range expected {
+		if result[i] != want {
+			t.Errorf("result[%d] = %q, want %q", i, result[i], want)
+		}
+	}
+}
+
+func TestMergeAllowedToolsPreservesExistingWhenNoCollected(t *testing.T) {
+	collected := []string{}
+	existing := []string{"shell(git pull)", "shell(git fetch)"}
+
+	result := mergeAllowedTools(collected, existing)
+
+	expected := []string{"shell(git fetch)", "shell(git pull)"}
+	if len(result) != len(expected) {
+		t.Fatalf("expected %d tools, got %d: %v", len(expected), len(result), result)
+	}
+	for i, want := range expected {
+		if result[i] != want {
+			t.Errorf("result[%d] = %q, want %q", i, result[i], want)
+		}
+	}
+}
+
+func TestMergeAllowedToolsReturnsEmptyWhenBothEmpty(t *testing.T) {
+	result := mergeAllowedTools([]string{}, []string{})
+	if len(result) != 0 {
+		t.Errorf("expected empty result, got: %v", result)
+	}
+}
+
+func TestMergeAllowedToolsSortedAlphabetically(t *testing.T) {
+	collected := []string{"shell(npm install)", "shell(go build)"}
+	existing := []string{"shell(git fetch)"}
+
+	result := mergeAllowedTools(collected, existing)
+
+	expected := []string{"shell(git fetch)", "shell(go build)", "shell(npm install)"}
+	if len(result) != len(expected) {
+		t.Fatalf("expected %d tools, got %d: %v", len(expected), len(result), result)
+	}
+	for i, want := range expected {
+		if result[i] != want {
+			t.Errorf("result[%d] = %q, want %q", i, result[i], want)
+		}
+	}
+}

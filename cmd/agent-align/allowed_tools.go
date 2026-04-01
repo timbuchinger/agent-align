@@ -353,6 +353,27 @@ func collectAllowedTools(cfg config.Config) ([]string, error) {
 	return tools, nil
 }
 
+// mergeAllowedTools merges collectedTools (from agent files) with existingTools
+// (from the config file), deduplicates, and returns a sorted result.
+func mergeAllowedTools(collectedTools, existingTools []string) []string {
+	seen := make(map[string]struct{})
+	var merged []string
+	for _, t := range collectedTools {
+		if _, exists := seen[t]; !exists {
+			seen[t] = struct{}{}
+			merged = append(merged, t)
+		}
+	}
+	for _, t := range existingTools {
+		if _, exists := seen[t]; !exists {
+			seen[t] = struct{}{}
+			merged = append(merged, t)
+		}
+	}
+	sort.Strings(merged)
+	return merged
+}
+
 // buildWrapperScript generates the shell script content for the copilot wrapper.
 func buildWrapperScript(copilotPath string, tools []string) string {
 	var sb strings.Builder

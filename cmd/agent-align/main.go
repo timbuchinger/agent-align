@@ -55,7 +55,7 @@ func main() {
 	confirm := flag.Bool("confirm", false, "skip user confirmation prompt (useful for cron jobs)")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	exportAllowedToolsFlag := flag.Bool("export-allowed-tools", false, "read allowed tools from the configured target files and print a combined, sorted, deduplicated list")
-	updateAllowedToolsFlag := flag.Bool("update-allowed-tools", false, "read allowed tools from the configured target files and overwrite the allowedTools list in the config file")
+	updateAllowedToolsFlag := flag.Bool("update-allowed-tools", false, "read allowed tools from the configured target files and merge them into the allowedTools list in the config file")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "agent-align version %s\n\n", version)
@@ -96,7 +96,7 @@ func main() {
 		return
 	}
 
-	// Handle -update-allowed-tools: collect tools and overwrite the config.
+	// Handle -update-allowed-tools: collect tools and merge with the config.
 	if *updateAllowedToolsFlag {
 		data, err := config.Load(resolvedConfigPath)
 		if err != nil {
@@ -106,6 +106,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to collect allowed tools: %v", err)
 		}
+		// Merge collected tools with the existing alwaysAllowedTools from the config.
+		tools = mergeAllowedTools(tools, data.AllowedTools.AlwaysAllowedTools)
 		fmt.Printf("The following allowed tools will be written to %s:\n", resolvedConfigPath)
 		if len(tools) == 0 {
 			fmt.Println("  (none)")
