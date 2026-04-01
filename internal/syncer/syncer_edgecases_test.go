@@ -53,3 +53,37 @@ func TestFormatToTOML_MixedArrayAndTypes(t *testing.T) {
 		// Accept either presence or absence; just ensure formatting is stable (no panic)
 	}
 }
+
+func TestFormatToTOML_ToolsSectionsNoIntermediateEmpty(t *testing.T) {
+	servers := map[string]interface{}{
+		"myserver": map[string]interface{}{
+			"command": "uvx",
+			"tools": map[string]interface{}{
+				"search": map[string]interface{}{
+					"approval_mode": "approve",
+				},
+				"read": map[string]interface{}{
+					"approval_mode": "approve",
+				},
+			},
+		},
+	}
+
+	toml := formatToTOML(servers)
+
+	// Leaf tool sections should be present
+	if !strings.Contains(toml, "[mcp_servers.myserver.tools.search]") {
+		t.Errorf("expected search tool section, got:\n%s", toml)
+	}
+	if !strings.Contains(toml, "[mcp_servers.myserver.tools.read]") {
+		t.Errorf("expected read tool section, got:\n%s", toml)
+	}
+	if !strings.Contains(toml, "approval_mode = \"approve\"") {
+		t.Errorf("expected approval_mode value, got:\n%s", toml)
+	}
+
+	// Intermediate empty section [mcp_servers.myserver.tools] should not appear
+	if strings.Contains(toml, "[mcp_servers.myserver.tools]\n") {
+		t.Errorf("intermediate empty tools section should be suppressed, got:\n%s", toml)
+	}
+}

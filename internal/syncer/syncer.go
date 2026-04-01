@@ -348,40 +348,45 @@ func formatServerToTOML(sb *strings.Builder, sectionPath string, data map[string
 		}
 	}
 
-	// Write the section header and simple values
-	sb.WriteString(fmt.Sprintf("[%s]\n", sectionPath))
+	// Write the section header and simple values only when there are simple
+	// values to emit. Intermediate sections that contain only nested maps (e.g.
+	// [mcp_servers.foo.tools]) are skipped so that the output only shows leaf
+	// sections such as [mcp_servers.foo.tools.my_tool].
+	if len(simpleValues) > 0 || len(nestedMaps) == 0 {
+		sb.WriteString(fmt.Sprintf("[%s]\n", sectionPath))
 
-	// Sort keys for consistent output
-	keys := make([]string, 0, len(simpleValues))
-	for k := range simpleValues {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+		// Sort keys for consistent output
+		keys := make([]string, 0, len(simpleValues))
+		for k := range simpleValues {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 
-	for _, k := range keys {
-		v := simpleValues[k]
-		switch val := v.(type) {
-		case string:
-			sb.WriteString(fmt.Sprintf("%s = \"%s\"\n", k, val))
-		case []interface{}:
-			arr := make([]string, 0, len(val))
-			for _, item := range val {
-				if s, ok := item.(string); ok {
+		for _, k := range keys {
+			v := simpleValues[k]
+			switch val := v.(type) {
+			case string:
+				sb.WriteString(fmt.Sprintf("%s = \"%s\"\n", k, val))
+			case []interface{}:
+				arr := make([]string, 0, len(val))
+				for _, item := range val {
+					if s, ok := item.(string); ok {
+						arr = append(arr, fmt.Sprintf("\"%s\"", s))
+					}
+				}
+				sb.WriteString(fmt.Sprintf("%s = [%s]\n", k, strings.Join(arr, ", ")))
+			case []string:
+				arr := make([]string, 0, len(val))
+				for _, s := range val {
 					arr = append(arr, fmt.Sprintf("\"%s\"", s))
 				}
+				sb.WriteString(fmt.Sprintf("%s = [%s]\n", k, strings.Join(arr, ", ")))
+			default:
+				sb.WriteString(fmt.Sprintf("%s = %v\n", k, val))
 			}
-			sb.WriteString(fmt.Sprintf("%s = [%s]\n", k, strings.Join(arr, ", ")))
-		case []string:
-			arr := make([]string, 0, len(val))
-			for _, s := range val {
-				arr = append(arr, fmt.Sprintf("\"%s\"", s))
-			}
-			sb.WriteString(fmt.Sprintf("%s = [%s]\n", k, strings.Join(arr, ", ")))
-		default:
-			sb.WriteString(fmt.Sprintf("%s = %v\n", k, val))
 		}
+		sb.WriteString("\n")
 	}
-	sb.WriteString("\n")
 
 	// Sort nested map keys for consistent output
 	nestedKeys := make([]string, 0, len(nestedMaps))

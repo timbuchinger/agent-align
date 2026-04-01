@@ -163,15 +163,34 @@ func validateNetworkServer(name string, server map[string]interface{}) error {
 // CodexTransformer applies Codex-specific conversions.
 type CodexTransformer struct{}
 
-// Transform renames the "headers" field to "http_headers" for every server so
-// that Codex can parse them correctly.  For the special "github" server it also
-// converts an Authorization header into the bearer_token_env_var env-var field
-// that Codex expects.
+// Transform applies Codex-specific modifications to all server configurations:
+//   - Converts the "alwaysAllow" list into nested [mcp_servers.<name>.tools.<tool>] TOML
+//     sections with approval_mode = "approve", as required by Codex config.toml.
+//   - Renames the "headers" field to "http_headers" for every server so that
+//     Codex can parse them correctly.
+//   - For the special "github" server it also converts an Authorization header
+//     into the bearer_token_env_var env-var field that Codex expects.
 func (t *CodexTransformer) Transform(servers map[string]interface{}) error {
 	for name, serverRaw := range servers {
 		server, ok := serverRaw.(map[string]interface{})
 		if !ok {
 			continue
+		}
+
+		// Convert alwaysAllow list to nested tools map with approval_mode = "approve".
+		if alwaysAllow, ok := server["alwaysAllow"].([]interface{}); ok {
+			toolsMap := make(map[string]interface{}, len(alwaysAllow))
+			for _, tool := range alwaysAllow {
+				if toolName, ok := tool.(string); ok {
+					toolsMap[toolName] = map[string]interface{}{
+						"approval_mode": "approve",
+					}
+				}
+			}
+			if len(toolsMap) > 0 {
+				server["tools"] = toolsMap
+			}
+			delete(server, "alwaysAllow")
 		}
 
 		headers, hasHeaders := server["headers"].(map[string]interface{})

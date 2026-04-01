@@ -9,30 +9,50 @@ AWS_API_MCP_PROFILE_NAME = "example-dev"
 AWS_REGION = "ca-central-1"
 
 [mcp_servers.azure]
-alwaysAllow = ["monitor", "documentation"]
 args = ["-y", "@azure/mcp@latest", "server", "start"]
 command = "npx"
 gallery = true
 type = "stdio"
 
+[mcp_servers.azure.tools.documentation]
+approval_mode = "approve"
+
+[mcp_servers.azure.tools.monitor]
+approval_mode = "approve"
+
 [mcp_servers.azure-devops]
-alwaysAllow = ["core_list_projects", "wit_my_work_items"]
 args = ["-y", "@azure-devops/mcp@latest", "example-organization"]
 command = "npx"
 disabled = false
+
+[mcp_servers.azure-devops.tools.core_list_projects]
+approval_mode = "approve"
+
+[mcp_servers.azure-devops.tools.wit_my_work_items]
+approval_mode = "approve"
 
 [mcp_servers.context7]
 type = "streamable-http"
 url = "https://mcp.example.com/mcp"
 
 [mcp_servers.github]
-alwaysAllow = ["get_file_contents", "list_commits", "push_files", "search_repositories"]
 type = "streamable-http"
 url = "https://api.example.com/mcp/"
 bearer_token_env_var = CODEX_GITHUB_PERSONAL_ACCESS_TOKEN
 
+[mcp_servers.github.tools.get_file_contents]
+approval_mode = "approve"
+
+[mcp_servers.github.tools.list_commits]
+approval_mode = "approve"
+
+[mcp_servers.github.tools.push_files]
+approval_mode = "approve"
+
+[mcp_servers.github.tools.search_repositories]
+approval_mode = "approve"
+
 [mcp_servers.grafana]
-alwaysAllow = ["list_datasources", "list_prometheus_metric_names", "query_prometheus", "query_loki_stats", "query_loki_logs"]
 args = []
 command = "mcp-grafana"
 
@@ -40,13 +60,29 @@ command = "mcp-grafana"
 GRAFANA_SERVICE_ACCOUNT_TOKEN = "REPLACE_WITH_GRAFANA_TOKEN"
 GRAFANA_URL = "https://grafana.example.com"
 
+[mcp_servers.grafana.tools.list_datasources]
+approval_mode = "approve"
+
+[mcp_servers.grafana.tools.list_prometheus_metric_names]
+approval_mode = "approve"
+
+[mcp_servers.grafana.tools.query_loki_logs]
+approval_mode = "approve"
+
+[mcp_servers.grafana.tools.query_loki_stats]
+approval_mode = "approve"
+
+[mcp_servers.grafana.tools.query_prometheus]
+approval_mode = "approve"
+
 [mcp_servers.kubernetes]
-alwaysAllow = ["resources_list"]
 args = ["-y", "kubernetes-mcp-server@latest"]
 command = "npx"
 
+[mcp_servers.kubernetes.tools.resources_list]
+approval_mode = "approve"
+
 [mcp_servers.qdrant]
-alwaysAllow = ["qdrant-find"]
 args = ["mcp-server-qdrant"]
 command = "uvx"
 disabled = false
@@ -57,7 +93,30 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 QDRANT_API_KEY = "1234567890"
 QDRANT_URL = "https://example-qdrant.aws.cloud.qdrant.io:6333"
 
+[mcp_servers.qdrant.tools.qdrant-find]
+approval_mode = "approve"
+
 [mcp_servers.terraform]
-alwaysAllow = ["get_run_details", "get_workspace_details", "list_workspaces", "list_workspace_variables", "list_runs", "create_run", "list_terraform_projects"]
 args = ["run", "-i", "--rm", "-e", "TFE_TOKEN=REPLACE_WITH_TFE_TOKEN", "hashicorp/terraform-mcp-server:latest"]
 command = "docker"
+
+[mcp_servers.terraform.tools.create_run]
+approval_mode = "approve"
+
+[mcp_servers.terraform.tools.get_run_details]
+approval_mode = "approve"
+
+[mcp_servers.terraform.tools.get_workspace_details]
+approval_mode = "approve"
+
+[mcp_servers.terraform.tools.list_runs]
+approval_mode = "approve"
+
+[mcp_servers.terraform.tools.list_terraform_projects]
+approval_mode = "approve"
+
+[mcp_servers.terraform.tools.list_workspace_variables]
+approval_mode = "approve"
+
+[mcp_servers.terraform.tools.list_workspaces]
+approval_mode = "approve"
