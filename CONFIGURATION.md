@@ -125,11 +125,16 @@ extraTargets:
   - `configPath` (string, optional) – path to the MCP definitions file. Defaults
     to `agent-align-mcp.yml` next to the target config when omitted.
   - `targets` (mapping, required) – agents to write plus optional extras.
-    - `agents` (sequence, required) – list of agent names or objects with `name`
-      and optional `path` override for the destination file. Repeat an agent
-      with different `path` values to write the same format to multiple
-      destinations. Exact duplicate `name + path` combinations and blank entries
-      are ignored.
+    - `agents` (sequence, required) – list of agent names or objects with `name`,
+      an optional `path` override for the destination file, and an optional
+      `disabledMcpServers` list. Repeat an agent with different `path` values to
+      write the same format to multiple destinations. Exact duplicate
+      `name + path + disabledMcpServers` combinations and blank entries are ignored.
+      - `disabledMcpServers` (sequence, optional) – list of MCP server IDs (keys
+        from the MCP definitions file) that should be excluded when syncing to
+        this agent. Matching is case-insensitive. Use this to prevent specific
+        servers from being written to agents that don't support them or don't
+        need them.
     - `additionalTargets.json` (sequence, optional) – mirror the MCP payload
       into other JSON files. Each entry must specify `filePath` and may set
       `jsonPath` (dot-separated) where the servers should be placed; omit
@@ -139,6 +144,29 @@ extraTargets:
       `filePath` and may set `jsonPath` (dot-separated) where the servers
       should be placed; omit `jsonPath` to replace the entire file. Comments
       in the original file will be stripped when writing the updated content.
+
+### Excluding MCP servers per agent
+
+Use `disabledMcpServers` on an agent entry to prevent specific MCP servers from
+being synced to that agent. This is useful when a server is incompatible with a
+particular agent or simply not needed there.
+
+```yaml
+mcpServers:
+  configPath: agent-align-mcp.yml
+  targets:
+    agents:
+      - name: copilot           # receives all servers
+      - name: vscode
+        disabledMcpServers:
+          - gdrive              # gdrive will NOT be synced to vscode
+          - box                 # box will NOT be synced to vscode
+      - name: claudecode        # receives all servers
+```
+
+Server IDs in `disabledMcpServers` must match the keys defined in your MCP
+definitions file. Matching is case-insensitive.
+
 - `extraTargets` (mapping, optional) – copies additional content alongside the
   MCP sync.
   - `files` (sequence) – mirror a single source file to multiple destinations.
