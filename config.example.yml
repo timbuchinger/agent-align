@@ -5,6 +5,8 @@ mcpServers:
     agents:
       - name: copilot
       - name: vscode
+        # disabledMcpServers lists MCP server IDs (from config-mcp.yml) that
+        # should NOT be synced to this agent.
         disabledMcpServers:
           - gdrive
           - box
