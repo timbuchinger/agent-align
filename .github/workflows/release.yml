@@ -28,7 +28,7 @@ jobs:
     env:
       GOCACHE: /tmp/agent-align-go-cache
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
@@ -48,7 +48,7 @@ jobs:
       release_type: ${{ steps.capture.outputs.release_type }}
       release_version: ${{ steps.compute-version.outputs.release_version || 'unknown' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
@@ -96,7 +96,7 @@ jobs:
       RELEASE_TYPE_OVERRIDE: ${{ needs.verify.outputs.release_type }}
       GOCACHE: /tmp/agent-align-go-cache
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
