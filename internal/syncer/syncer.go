@@ -36,7 +36,7 @@ type AgentResult struct {
 	Content string
 }
 
-var supportedAgentList = []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode", "opencode"}
+var supportedAgentList = []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode", "opencode", "pi"}
 
 // SupportedAgents returns a list of supported agent names.
 func SupportedAgents() []string {
@@ -106,6 +106,13 @@ func GetAgentConfig(agent, overridePath string) (AgentConfig, error) {
 			FilePath: applyOverride(overridePath, filepath.Join(homeDir, ".config", "opencode", "opencode.jsonc")),
 			NodeName: "mcp",
 			Format:   "jsonc",
+		}, nil
+	case "pi":
+		return AgentConfig{
+			Name:     name,
+			FilePath: applyOverride(overridePath, filepath.Join(homeDir, ".pi", "agent", "mcp.json")),
+			NodeName: "mcpServers",
+			Format:   "json",
 		}, nil
 	default:
 		return AgentConfig{}, fmt.Errorf("unsupported agent: %s", agent)
