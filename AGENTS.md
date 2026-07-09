@@ -2,7 +2,7 @@
 
 This repository powers **agent-align**, a Go utility for synchronizing MCP (model
 configuration profile) configs across coding agents such as Copilot, Codex, Claude
-Code, Gemini, Kilocode, OpenCode, VS Code, and others. It keeps every agent's
+Code, Gemini, Kilocode, OpenCode, Pi, VS Code, and others. It keeps every agent's
 configuration
 in lockstep so you can iterate on a single MCP template and automatically
 propagate changes to the rest of the toolchain.

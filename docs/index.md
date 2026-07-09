@@ -4,7 +4,7 @@
 
 Agent Align is a Go-based utility that keeps MCP configuration files aligned
 across coding agents such as Copilot, Codex, Claude Code, Gemini, Kilocode,
-OpenCode, and others. Define your MCP servers once in a neutral YAML file and
+OpenCode, Pi, and others. Define your MCP servers once in a neutral YAML file and
 Agent Align will
 convert it into the formats required by each tool while applying
 destination-specific tweaks automatically.
