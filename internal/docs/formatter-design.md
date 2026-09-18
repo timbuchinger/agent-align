@@ -24,6 +24,7 @@ ClaudeCode | JSON | `mcpServers` | `~/.claude.json`
 Gemini | JSON | `mcpServers` | `~/.gemini/settings.json`
 Kilocode | JSON | `mcpServers` | Platform-dependent (see note below)
 Pi | JSON | `mcpServers` | `~/.pi/agent/mcp.json`
+OMP | JSON | `mcpServers` | `~/.omp/agent/mcp.json`
 
 ## Core Types
 

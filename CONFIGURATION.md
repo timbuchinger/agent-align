@@ -209,6 +209,7 @@ claudecode | `~/.claude.json` | JSON | `mcpServers`
 gemini | `~/.gemini/settings.json` | JSON | `mcpServers`
 kilocode | Platform-dependent (see note below) | JSON | `mcpServers`
 pi | `~/.pi/agent/mcp.json` | JSON | `mcpServers`
+omp | `~/.omp/agent/mcp.json` | JSON | `mcpServers`
 
 Every agent accepts a `path` override in `targets.agents` if your installation
 lives elsewhere.

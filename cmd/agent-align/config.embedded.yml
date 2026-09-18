@@ -16,6 +16,7 @@ mcpServers:
         path: ~/.qwen/settings.json # qwen uses the same format as gemini, so re-use that target here
       - name: kilocode
       - name: pi
+      - name: omp
     additionalTargets:
       json:
         - filePath: /path/to/additional_targets.json
