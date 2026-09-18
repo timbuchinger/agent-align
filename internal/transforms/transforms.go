@@ -19,7 +19,7 @@ func GetTransformer(agent string) Transformer {
 	switch strings.ToLower(strings.TrimSpace(agent)) {
 	case "copilot":
 		return &CopilotTransformer{}
-	case "claudecode":
+	case "claudecode", "omp":
 		return &ClaudeTransformer{}
 	case "codex":
 		return &CodexTransformer{}

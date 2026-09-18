@@ -20,6 +20,7 @@ func TestGetTransformer(t *testing.T) {
 		{"codex", "codex", false, true, false, false, false},
 		{"codex spaced", " codex ", false, true, false, false, false},
 		{"claude", "claudecode", false, false, true, false, false},
+		{"omp", "omp", false, false, true, false, false},
 		{"gemini", "gemini", false, false, false, true, false},
 		{"gemini spaced", " gemini ", false, false, false, true, false},
 		{"opencode", "opencode", false, false, false, false, true},
@@ -111,6 +112,27 @@ func TestCopilotTransformer_AddsToolsAndNormalizesTypes(t *testing.T) {
 
 func TestClaudeTransformer_NormalizesTypes(t *testing.T) {
 	transformer := &ClaudeTransformer{}
+	servers := map[string]interface{}{
+		"network-stream": map[string]interface{}{
+			"type": "streamable-http",
+			"url":  "http://example.test",
+		},
+		"command": map[string]interface{}{
+			"command": "npx",
+		},
+	}
+
+	if err := transformer.Transform(servers); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if servers["network-stream"].(map[string]interface{})["type"] != "http" {
+		t.Errorf("expected streamable-http to be normalized to http, got %v", servers["network-stream"].(map[string]interface{})["type"])
+	}
+}
+
+func TestOmpTransformer_NormalizesTypes(t *testing.T) {
+	transformer := GetTransformer("omp")
 	servers := map[string]interface{}{
 		"network-stream": map[string]interface{}{
 			"type": "streamable-http",
