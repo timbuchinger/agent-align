@@ -80,7 +80,7 @@ func TestSyncerSync(t *testing.T) {
 
 func TestSupportedAgents(t *testing.T) {
 	agents := SupportedAgents()
-	expected := []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode", "opencode", "pi"}
+	expected := []string{"copilot", "vscode", "codex", "claudecode", "gemini", "kilocode", "opencode", "pi", "omp"}
 	if len(agents) != len(expected) {
 		t.Fatalf("expected %d agents, got %d", len(expected), len(agents))
 	}
@@ -88,6 +88,48 @@ func TestSupportedAgents(t *testing.T) {
 		if agents[i] != name {
 			t.Fatalf("agent[%d] = %s, want %s", i, agents[i], name)
 		}
+	}
+}
+
+func TestGetAgentConfigOMP(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg, err := GetAgentConfig("omp", "")
+	if err != nil {
+		t.Fatalf("expected no error for omp, got %v", err)
+	}
+
+	expectedPath := filepath.Join(home, ".omp", "agent", "mcp.json")
+	if cfg.Name != "omp" {
+		t.Fatalf("expected name omp, got %q", cfg.Name)
+	}
+	if cfg.FilePath != expectedPath {
+		t.Fatalf("expected path %q, got %q", expectedPath, cfg.FilePath)
+	}
+	if cfg.NodeName != "mcpServers" {
+		t.Fatalf("expected node mcpServers, got %q", cfg.NodeName)
+	}
+	if cfg.Format != "json" {
+		t.Fatalf("expected format json, got %q", cfg.Format)
+	}
+}
+
+func TestGetAgentConfigOhMyPiAlias(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg, err := GetAgentConfig("oh-my-pi", "")
+	if err != nil {
+		t.Fatalf("expected no error for oh-my-pi alias, got %v", err)
+	}
+
+	expectedPath := filepath.Join(home, ".omp", "agent", "mcp.json")
+	if cfg.Name != "omp" {
+		t.Fatalf("expected normalized name omp, got %q", cfg.Name)
+	}
+	if cfg.FilePath != expectedPath {
+		t.Fatalf("expected path %q, got %q", expectedPath, cfg.FilePath)
 	}
 }
 
