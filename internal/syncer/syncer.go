@@ -500,8 +500,8 @@ func dedupeTargets(targets []AgentTarget) []AgentTarget {
 		}
 		seen[key] = struct{}{}
 		out = append(out, AgentTarget{
-			Name:         name,
-			PathOverride: strings.TrimSpace(target.PathOverride),
+			Name:               name,
+			PathOverride:       strings.TrimSpace(target.PathOverride),
 			DisabledMcpServers: disabled,
 		})
 	}

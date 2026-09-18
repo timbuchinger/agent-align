@@ -89,47 +89,47 @@ func TestSupportedAgents(t *testing.T) {
 			t.Fatalf("agent[%d] = %s, want %s", i, agents[i], name)
 		}
 	}
+}
 
-	func TestGetAgentConfigOMP(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+func TestGetAgentConfigOMP(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 
-		cfg, err := GetAgentConfig("omp", "")
-		if err != nil {
-			t.Fatalf("expected no error for omp, got %v", err)
-		}
-
-		expectedPath := filepath.Join(home, ".omp", "agent", "mcp.json")
-		if cfg.Name != "omp" {
-			t.Fatalf("expected name omp, got %q", cfg.Name)
-		}
-		if cfg.FilePath != expectedPath {
-			t.Fatalf("expected path %q, got %q", expectedPath, cfg.FilePath)
-		}
-		if cfg.NodeName != "mcpServers" {
-			t.Fatalf("expected node mcpServers, got %q", cfg.NodeName)
-		}
-		if cfg.Format != "json" {
-			t.Fatalf("expected format json, got %q", cfg.Format)
-		}
+	cfg, err := GetAgentConfig("omp", "")
+	if err != nil {
+		t.Fatalf("expected no error for omp, got %v", err)
 	}
 
-	func TestGetAgentConfigOhMyPiAlias(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+	expectedPath := filepath.Join(home, ".omp", "agent", "mcp.json")
+	if cfg.Name != "omp" {
+		t.Fatalf("expected name omp, got %q", cfg.Name)
+	}
+	if cfg.FilePath != expectedPath {
+		t.Fatalf("expected path %q, got %q", expectedPath, cfg.FilePath)
+	}
+	if cfg.NodeName != "mcpServers" {
+		t.Fatalf("expected node mcpServers, got %q", cfg.NodeName)
+	}
+	if cfg.Format != "json" {
+		t.Fatalf("expected format json, got %q", cfg.Format)
+	}
+}
 
-		cfg, err := GetAgentConfig("oh-my-pi", "")
-		if err != nil {
-			t.Fatalf("expected no error for oh-my-pi alias, got %v", err)
-		}
+func TestGetAgentConfigOhMyPiAlias(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 
-		expectedPath := filepath.Join(home, ".omp", "agent", "mcp.json")
-		if cfg.Name != "omp" {
-			t.Fatalf("expected normalized name omp, got %q", cfg.Name)
-		}
-		if cfg.FilePath != expectedPath {
-			t.Fatalf("expected path %q, got %q", expectedPath, cfg.FilePath)
-		}
+	cfg, err := GetAgentConfig("oh-my-pi", "")
+	if err != nil {
+		t.Fatalf("expected no error for oh-my-pi alias, got %v", err)
+	}
+
+	expectedPath := filepath.Join(home, ".omp", "agent", "mcp.json")
+	if cfg.Name != "omp" {
+		t.Fatalf("expected normalized name omp, got %q", cfg.Name)
+	}
+	if cfg.FilePath != expectedPath {
+		t.Fatalf("expected path %q, got %q", expectedPath, cfg.FilePath)
 	}
 }
 

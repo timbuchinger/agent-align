@@ -4,7 +4,8 @@
 
 agent-align is a Go-based utility that keeps MCP configuration files aligned
 across coding agents such as Copilot, VSCode, Codex, Claude Code, Gemini,
-Kilocode, OpenCode, Pi, OMP (Oh My Pi), and others. Define your MCP servers once in
+Kilocode, OpenCode, Pi, OMP (Oh My Pi), and others. Define your MCP servers
+once in
 `agent-align-mcp.yml` and agent-align
 converts that configuration into the formats required by each tool while
 applying agent-specific tweaks automatically. Detailed documentation is hosted
